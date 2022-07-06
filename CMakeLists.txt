@@ -5,12 +5,14 @@ project(CNPYpp)
 option(ENABLE_STATIC "Build static (.a) library" ON)
 
 find_package(ZLIB REQUIRED)
+FIND_PACKAGE(Boost COMPONENTS filesystem REQUIRED)
 
 include_directories(${ZLIB_INCLUDE_DIRS})
 
 add_library(cnpy SHARED "cnpy.cpp")
 target_compile_features(cnpy PUBLIC cxx_std_17)
-target_link_libraries(cnpy ${ZLIB_LIBRARIES})
+target_include_directories(cnpy PUBLIC ${Boost_INCLUDE_DIR} ${ZLIB_INCLUDE_DIRS})
+target_link_libraries(cnpy ${ZLIB_LIBRARIES} Boost::filesystem)
 install(TARGETS "cnpy" LIBRARY DESTINATION lib PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
 
 if(ENABLE_STATIC)
@@ -20,8 +22,7 @@ if(ENABLE_STATIC)
     install(TARGETS "cnpy-static" ARCHIVE DESTINATION lib)
 endif(ENABLE_STATIC)
 
-install(FILES "cnpy.h" DESTINATION include)
-install(FILES "mat2npz" "npy2mat" "npz2mat" DESTINATION bin PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+install(FILES "cnpy.hpp" DESTINATION include)
 
 add_executable(example1 example1.cpp)
 target_link_libraries(example1 cnpy)
