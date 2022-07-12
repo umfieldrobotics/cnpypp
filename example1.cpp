@@ -33,15 +33,18 @@ int main() {
 
     // make sure the loaded data matches the saved data
     if (!(arr.word_size == sizeof(decltype(data)::value_type))) {
+      std::cerr << "error in line " << __LINE__ << std::endl;
       return EXIT_FAILURE;
     }
 
     if (arr.shape.size() != shape.size() ||
         !std::equal(shape.cbegin(), shape.cend(), arr.shape.cbegin())) {
+      std::cerr << "error in line " << __LINE__ << std::endl;
       return EXIT_FAILURE;
     }
 
     if (!std::equal(data.cbegin(), data.cend(), loaded_data)) {
+      std::cerr << "error in line " << __LINE__ << std::endl;
       return EXIT_FAILURE;
     }
   }
@@ -56,6 +59,7 @@ int main() {
 
     // make sure the loaded data matches the saved data
     if (!(arr.word_size == sizeof(decltype(data)::value_type))) {
+      std::cerr << "error in line " << __LINE__ << std::endl;
       return EXIT_FAILURE;
     }
 
@@ -73,11 +77,13 @@ int main() {
 
     if (arr.shape.size() != shape.size() ||
         !std::equal(new_shape.cbegin(), new_shape.cend(), arr.shape.cbegin())) {
+      std::cerr << "error in line " << __LINE__ << std::endl;
       return EXIT_FAILURE;
     }
 
     if (!std::equal(complete_new_data.cbegin(), complete_new_data.cend(),
                     loaded_data)) {
+      std::cerr << "error in line " << __LINE__ << std::endl;
       return EXIT_FAILURE;
     }
   }
@@ -95,14 +101,17 @@ int main() {
 
     // make sure the loaded data matches the saved data
     if (!(arr.word_size == sizeof(decltype(str1)::value_type))) {
+      std::cerr << "error in line " << __LINE__ << std::endl;
       return EXIT_FAILURE;
     }
 
     if (arr.shape.size() != 1 || arr.shape.at(0) != str1.size()) {
+      std::cerr << "error in line " << __LINE__ << std::endl;
       return EXIT_FAILURE;
     }
 
     if (!std::equal(str1.cbegin(), str1.cend(), loaded_data)) {
+      std::cerr << "error in line " << __LINE__ << std::endl;
       return EXIT_FAILURE;
     }
   }
@@ -116,14 +125,17 @@ int main() {
 
     // make sure the loaded data matches the saved data
     if (!(arr.word_size == sizeof(decltype(str2)::value_type))) {
+      std::cerr << "error in line " << __LINE__ << std::endl;
       return EXIT_FAILURE;
     }
 
     if (arr.shape.size() != 1 || arr.shape.at(0) != str2.size()) {
+      std::cerr << "error in line " << __LINE__ << std::endl;
       return EXIT_FAILURE;
     }
 
     if (!std::equal(str2.cbegin(), str2.cend(), loaded_data)) {
+      std::cerr << "error in line " << __LINE__ << std::endl;
       return EXIT_FAILURE;
     }
   }
@@ -137,14 +149,17 @@ int main() {
 
     // make sure the loaded data matches the saved data
     if (!(arr.word_size == sizeof(decltype(str1)::value_type))) {
+      std::cerr << "error in line " << __LINE__ << std::endl;
       return EXIT_FAILURE;
     }
 
     if (arr.shape.size() != 1 || arr.shape.at(0) != str1.size()) {
+      std::cerr << "error in line " << __LINE__ << std::endl;
       return EXIT_FAILURE;
     }
 
     if (!std::equal(str1.cbegin(), str1.cend(), loaded_str)) {
+      std::cerr << "error in line " << __LINE__ << std::endl;
       return EXIT_FAILURE;
     }
   }
