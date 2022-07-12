@@ -29,7 +29,7 @@ int main() {
   // load it into a new array
   {
     cnpy::NpyArray const arr = cnpy::npy_load("arr1.npy");
-    auto const *const loaded_data = arr.data<uint32_t>();
+    auto const* const loaded_data = arr.data<uint32_t>();
 
     // make sure the loaded data matches the saved data
     if (!(arr.word_size == sizeof(decltype(data)::value_type))) {
@@ -55,7 +55,7 @@ int main() {
 
   {
     cnpy::NpyArray const arr = cnpy::npy_load("arr1.npy");
-    auto const *const loaded_data = arr.data<uint32_t>();
+    auto const* const loaded_data = arr.data<uint32_t>();
 
     // make sure the loaded data matches the saved data
     if (!(arr.word_size == sizeof(decltype(data)::value_type))) {
@@ -88,16 +88,16 @@ int main() {
     }
   }
 
-  // now write to an npz file
   std::string_view const str1 = "abcdefghijklmno";
-  {
-    std::string_view const str1 = "abcdefghijklmno";
+  std::string_view const str2 = "pqrstuvwxyz";
 
+  // now write to an npz file
+  {
     cnpy::npz_save("out.npz", "str", str1.cbegin(), {str1.size()}, "w");
 
-    // load str2 back from npz file
+    // load str1 back from npz file
     cnpy::NpyArray arr = cnpy::npz_load("out.npz", "str");
-    auto const *const loaded_data = arr.data<char>();
+    auto const* const loaded_data = arr.data<char>();
 
     // make sure the loaded data matches the saved data
     if (!(arr.word_size == sizeof(decltype(str1)::value_type))) {
@@ -116,12 +116,13 @@ int main() {
     }
   }
 
-  std::string_view const str2 = "pqrstuvwxyz";
   // append to npz
   {
+    cnpy::npz_save("out.npz", "str2", str2.cbegin(), {str2.size()}, "a");
+
     // load str2 back from npz file
-    cnpy::NpyArray arr = cnpy::npz_load("out.npz", "str");
-    auto const *const loaded_data = arr.data<char>();
+    cnpy::NpyArray arr = cnpy::npz_load("out.npz", "str2");
+    auto const* const loaded_data = arr.data<char>();
 
     // make sure the loaded data matches the saved data
     if (!(arr.word_size == sizeof(decltype(str2)::value_type))) {
@@ -131,6 +132,7 @@ int main() {
 
     if (arr.shape.size() != 1 || arr.shape.at(0) != str2.size()) {
       std::cerr << "error in line " << __LINE__ << std::endl;
+      std::cerr << arr.shape.size() << '\n';
       return EXIT_FAILURE;
     }
 
@@ -144,8 +146,8 @@ int main() {
   {
     cnpy::npz_t my_npz = cnpy::npz_load("out.npz");
 
-    cnpy::NpyArray const &arr = my_npz.find("str")->second;
-    char const *const loaded_str = arr.data<char>();
+    cnpy::NpyArray const& arr = my_npz.find("str")->second;
+    char const* const loaded_str = arr.data<char>();
 
     // make sure the loaded data matches the saved data
     if (!(arr.word_size == sizeof(decltype(str1)::value_type))) {
