@@ -233,7 +233,6 @@ void npz_save(std::string const &zipname, std::string fname,
   std::vector<char> global_header;
 
   if (mode == "a" && boost::filesystem::exists(zipname)) {
-    std::cout << "npz_save appending";
     fs.open(zipname,
             std::ios_base::in | std::ios_base::out | std::ios_base::binary);
     // zip file exists. we need to add a new npy file to it.
@@ -244,7 +243,6 @@ void npz_save(std::string const &zipname, std::string fname,
     size_t global_header_size;
     parse_zip_footer(fs, nrecs, global_header_size, global_header_offset);
     fs.seekp(global_header_offset, std::ios_base::beg);
-    std::cout << std::hex << fs.tellg() << " " << fs.tellp() << std::endl;
     global_header.resize(global_header_size);
     fs.read(&global_header[0], sizeof(char) * global_header_size);
     if (fs.gcount() != global_header_size) {
@@ -252,7 +250,6 @@ void npz_save(std::string const &zipname, std::string fname,
           "npz_save: header read error while adding to existing zip");
     }
     fs.seekp(global_header_offset, std::ios_base::beg);
-    std::cout << "tell: " << std::hex << fs.tellp() << std::endl;
   } else {
     fs.open(zipname, std::ios_base::out | std::ios_base::binary);
   }
