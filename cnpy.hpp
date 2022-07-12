@@ -27,8 +27,8 @@
 
 namespace cnpy {
 struct NpyArray {
-  NpyArray(std::vector<size_t> const &_shape, size_t _word_size,
-           bool _fortran_order, std::unique_ptr<uint8_t[]> &&_buffer,
+  NpyArray(std::vector<size_t> const& _shape, size_t _word_size,
+           bool _fortran_order, std::unique_ptr<uint8_t[]>&& _buffer,
            size_t _buffer_length)
       : shape{_shape}, word_size{_word_size}, fortran_order{_fortran_order},
         num_vals{std::accumulate(shape.begin(), shape.end(), size_t{1},
@@ -36,12 +36,12 @@ struct NpyArray {
         offset{_buffer_length - num_vals * _word_size}, buffer{std::move(
                                                             _buffer)} {}
 
-  NpyArray(NpyArray &&other)
+  NpyArray(NpyArray&& other)
       : shape{std::move(other.shape)}, word_size{other.word_size},
         fortran_order{other.fortran_order}, num_vals{other.num_vals},
         offset{other.offset}, buffer{std::move(other.buffer)} {}
 
-  NpyArray(std::vector<size_t> const &_shape, size_t _word_size,
+  NpyArray(std::vector<size_t> const& _shape, size_t _word_size,
            bool _fortran_order)
       : NpyArray{_shape, _word_size, _fortran_order,
                  std::make_unique<uint8_t[]>(
@@ -50,35 +50,35 @@ struct NpyArray {
                  std::accumulate(_shape.begin(), _shape.end(), _word_size,
                                  std::multiplies<size_t>())} {}
 
-  NpyArray(NpyArray const &) = delete;
+  NpyArray(NpyArray const&) = delete;
 
-  template <typename T> T *data() {
-    return reinterpret_cast<T *>(&(buffer.get() + offset)[0]);
+  template <typename T> T* data() {
+    return reinterpret_cast<T*>(&(buffer.get() + offset)[0]);
   }
 
-  template <typename T> const T *data() const {
-    return reinterpret_cast<T const *>(&(buffer.get() + offset)[0]);
+  template <typename T> const T* data() const {
+    return reinterpret_cast<T const*>(&(buffer.get() + offset)[0]);
   }
 
   size_t num_bytes() const { return num_vals * word_size; }
 
-  bool compare_metadata(NpyArray const &other) const {
+  bool compare_metadata(NpyArray const& other) const {
     return shape == other.shape && word_size == other.word_size &&
            fortran_order == other.fortran_order;
   }
 
-  bool operator==(NpyArray const &other) const {
+  bool operator==(NpyArray const& other) const {
     return compare_metadata(other) &&
            !std::memcmp(this->data<void>(), other.data<void>(), num_bytes());
   }
 
-  template <typename T> T *begin() { return data<T>(); }
+  template <typename T> T* begin() { return data<T>(); }
 
-  template <typename T> T const *cbegin() const { return data<T>(); }
+  template <typename T> T const* cbegin() const { return data<T>(); }
 
-  template <typename T> T *end() { return data<T>() + num_vals; }
+  template <typename T> T* end() { return data<T>() + num_vals; }
 
-  template <typename T> T const *cend() const { return data<T>() + num_vals; }
+  template <typename T> T const* cend() const { return data<T>() + num_vals; }
 
   std::vector<size_t> const shape;
   size_t const word_size;
@@ -93,40 +93,42 @@ private:
 using npz_t = std::map<std::string, NpyArray>;
 
 char BigEndianTest();
-char map_type(const std::type_info &t);
+char map_type(const std::type_info& t);
 template <typename T>
-std::vector<char> create_npy_header(const std::vector<size_t> &shape);
-void parse_npy_header(std::istream &, size_t &word_size,
-                      std::vector<size_t> &shape, bool &fortran_order);
-void parse_npy_header(std::istream::char_type *buffer, size_t &word_size,
-                      std::vector<size_t> &shape, bool &fortran_order);
-void parse_zip_footer(std::istream &fp, uint16_t &nrecs,
-                      size_t &global_header_size, size_t &global_header_offset);
-npz_t npz_load(std::string const &fname);
-NpyArray npz_load(std::string const &fname, std::string const &varname);
-NpyArray npy_load(std::string const &fname);
+std::vector<char> create_npy_header(const std::vector<size_t>& shape);
+void parse_npy_header(std::istream&, size_t& word_size,
+                      std::vector<size_t>& shape, bool& fortran_order);
+void parse_npy_header(std::istream::char_type* buffer, size_t& word_size,
+                      std::vector<size_t>& shape, bool& fortran_order);
+void parse_zip_footer(std::istream& fp, uint16_t& nrecs,
+                      size_t& global_header_size, size_t& global_header_offset);
+npz_t npz_load(std::string const& fname);
+NpyArray npz_load(std::string const& fname, std::string const& varname);
+NpyArray npy_load(std::string const& fname);
 
 template <typename TConstInputIterator>
-void write_data(TConstInputIterator, size_t, std::ostream &);
+void write_data(TConstInputIterator, size_t, std::ostream&);
 
 template <typename T>
-std::vector<char> &operator+=(std::vector<char> &lhs, const T rhs) {
+std::vector<char>& operator+=(std::vector<char>& lhs, const T rhs) {
   // write in little endian
   for (size_t byte = 0; byte < sizeof(T); byte++) {
-    char val = *((char *)&rhs + byte);
+    char val = *((char*)&rhs + byte);
     lhs.push_back(val);
   }
   return lhs;
 }
 
+std::vector<char>& append(std::vector<char>&, std::string_view);
+
 template <>
-std::vector<char> &operator+=(std::vector<char> &lhs, const std::string rhs);
+std::vector<char>& operator+=(std::vector<char>& lhs, std::string rhs);
 template <>
-std::vector<char> &operator+=(std::vector<char> &lhs, const char *rhs);
+std::vector<char>& operator+=(std::vector<char>& lhs, const char* rhs);
 
 template <typename TConstInputIterator>
-void npy_save(std::string const &fname, TConstInputIterator start,
-              std::vector<size_t> const &shape, std::string_view mode = "w") {
+void npy_save(std::string const& fname, TConstInputIterator start,
+              std::vector<size_t> const& shape, std::string_view mode = "w") {
   std::fstream fs;
   std::vector<size_t>
       true_data_shape; // if appending, the shape of existing + new data
@@ -192,7 +194,7 @@ void npy_save(std::string const &fname, TConstInputIterator start,
 }
 
 template <typename TConstInputIterator>
-void write_data(TConstInputIterator start, size_t nels, std::ostream &fs) {
+void write_data(TConstInputIterator start, size_t nels, std::ostream& fs) {
   using value_type =
       typename std::iterator_traits<TConstInputIterator>::value_type;
 
@@ -211,14 +213,14 @@ void write_data(TConstInputIterator start, size_t nels, std::ostream &fs) {
       ++count;
       ++elements_written;
     }
-    fs.write(reinterpret_cast<std::ostream::char_type *>(buffer.get()),
+    fs.write(reinterpret_cast<std::ostream::char_type*>(buffer.get()),
              sizeof(value_type) / sizeof(std::ostream::char_type) * count);
   }
 }
 
 template <typename TConstInputIterator>
-void npz_save(std::string const &zipname, std::string fname,
-              TConstInputIterator start, const std::vector<size_t> &shape,
+void npz_save(std::string const& zipname, std::string fname,
+              TConstInputIterator start, const std::vector<size_t>& shape,
               std::string_view mode = "w") {
   using value_type =
       typename std::iterator_traits<TConstInputIterator>::value_type;
@@ -261,19 +263,19 @@ void npz_save(std::string const &zipname, std::string fname,
   size_t nbytes = nels * sizeof(value_type) + npy_header.size();
 
   // get the CRC of the data to be added
-  uint32_t crc = crc32(0L, (uint8_t *)&npy_header[0], npy_header.size());
+  uint32_t crc = crc32(0L, (uint8_t*)&npy_header[0], npy_header.size());
 
   auto it = start;
   for (size_t i = 0; i < nels; ++i) {
     auto data = *it;
     ++it;
     static_assert(std::is_same_v<decltype(data), value_type>);
-    crc = crc32(crc, (uint8_t *)(&data), sizeof(value_type));
+    crc = crc32(crc, (uint8_t*)(&data), sizeof(value_type));
   }
 
   // build the local header
   std::vector<char> local_header;
-  local_header += "PK";                   // first part of sig
+  append(local_header, "PK");             // first part of sig
   local_header += (uint16_t)0x0403;       // second part of sig
   local_header += (uint16_t)20;           // min version to extract
   local_header += (uint16_t)0;            // general purpose bit flag
@@ -285,10 +287,10 @@ void npz_save(std::string const &zipname, std::string fname,
   local_header += (uint32_t)nbytes;       // uncompressed size
   local_header += (uint16_t)fname.size(); // fname length
   local_header += (uint16_t)0;            // extra field length
-  local_header += fname;
+  append(local_header, fname);
 
   // build global header
-  global_header += "PK";             // first part of sig
+  append(global_header, "PK");       // first part of sig
   global_header += (uint16_t)0x0201; // second part of sig
   global_header += (uint16_t)20;     // version made by
   global_header.insert(global_header.end(), local_header.begin() + 4,
@@ -300,22 +302,22 @@ void npz_save(std::string const &zipname, std::string fname,
   global_header += (uint32_t)
       global_header_offset; // relative offset of local file header, since it
                             // begins where the global header used to begin
-  global_header += fname;
+  append(global_header, fname);
 
   // build footer
   std::vector<char> footer;
-  footer += "PK";                           // first part of sig
+  append(footer, "PK");                           // first part of sig
   footer += (uint16_t)0x0605;               // second part of sig
   footer += (uint16_t)0;                    // number of this disk
   footer += (uint16_t)0;                    // disk where footer starts
   footer += (uint16_t)(nrecs + 1);          // number of records on this disk
   footer += (uint16_t)(nrecs + 1);          // total number of records
   footer += (uint32_t)global_header.size(); // nbytes of global headers
-  footer += (uint32_t)(
-      global_header_offset + nbytes +
-      local_header.size()); // offset of start of global headers, since global
-                            // header now starts after newly written array
-  footer += (uint16_t)0;    // zip file comment length
+  footer += (uint32_t)(global_header_offset + nbytes +
+                       local_header.size()); // offset of start of global
+                                             // headers, since global header now
+                                             // starts after newly written array
+  footer += (uint16_t)0; // zip file comment length
 
   // write everything
   fs.write(&local_header[0], sizeof(char) * local_header.size());
@@ -329,33 +331,33 @@ void npz_save(std::string const &zipname, std::string fname,
 }
 
 template <typename TConstInputIterator>
-void npy_save(std::string const &fname, TConstInputIterator first,
+void npy_save(std::string const& fname, TConstInputIterator first,
               TConstInputIterator last, std::string_view mode = "w") {
   npy_save(fname, first, {std::distance(first, last)}, mode);
 }
 
 template <typename T>
-void npz_save(std::string const &zipname, std::string_view fname,
-              const std::vector<T> &data, std::string_view mode = "w") {
+void npz_save(std::string const& zipname, std::string_view fname,
+              const std::vector<T>& data, std::string_view mode = "w") {
   npz_save(zipname, fname, &data[0], {data.size()}, mode);
 }
 
 template <typename T>
-std::vector<char> create_npy_header(const std::vector<size_t> &shape) {
+std::vector<char> create_npy_header(const std::vector<size_t>& shape) {
   std::vector<char> dict;
-  dict += "{'descr': '";
+  append(dict, "{'descr': '");
   dict += BigEndianTest();
   dict += map_type(typeid(T));
-  dict += std::to_string(sizeof(T));
-  dict += "', 'fortran_order': False, 'shape': (";
-  dict += std::to_string(shape[0]);
+  append(dict, std::to_string(sizeof(T)));
+  append(dict, "', 'fortran_order': False, 'shape': (");
+  append(dict, std::to_string(shape[0]));
   for (size_t i = 1; i < shape.size(); i++) {
-    dict += ", ";
-    dict += std::to_string(shape[i]);
+    append(dict, ", ");
+    append(dict, std::to_string(shape[i]));
   }
   if (shape.size() == 1)
-    dict += ",";
-  dict += "), }";
+    append(dict, ",");
+  append(dict, "), }");
   // pad with spaces so that preamble+dict is modulo 16 bytes. preamble is 10
   // bytes. dict needs to end with \n
   int remainder = 16 - (10 + dict.size()) % 16;
@@ -364,7 +366,7 @@ std::vector<char> create_npy_header(const std::vector<size_t> &shape) {
 
   std::vector<char> header;
   header += (char)0x93;
-  header += "NUMPY";
+  append(header, "NUMPY");
   header += (char)0x01; // major version of numpy format
   header += (char)0x00; // minor version of numpy format
   header += (uint16_t)dict.size();

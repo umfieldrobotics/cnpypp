@@ -62,9 +62,13 @@ char cnpy::map_type(const std::type_info& t) {
     return '?';
 }
 
+std::vector<char>& cnpy::append(std::vector<char>& vec, std::string_view view) {
+  vec.insert(vec.end(), view.begin(), view.end());
+  return vec;
+}
+
 template <>
-std::vector<char>& cnpy::operator+=(std::vector<char>& lhs,
-                                    const std::string rhs) {
+std::vector<char>& cnpy::operator+=(std::vector<char>& lhs, std::string rhs) {
   lhs.insert(lhs.end(), rhs.begin(), rhs.end());
   return lhs;
 }
@@ -73,7 +77,7 @@ template <>
 std::vector<char>& cnpy::operator+=(std::vector<char>& lhs, const char* rhs) {
   // write in little endian
   size_t len = strlen(rhs);
-  lhs.reserve(len);
+  lhs.reserve(lhs.size() + len);
   for (size_t byte = 0; byte < len; byte++) {
     lhs.push_back(rhs[byte]);
   }
@@ -286,7 +290,7 @@ cnpy::npz_t cnpy::npz_load(std::string const& fname) {
     uint16_t extra_field_len = *(uint16_t*)&local_header[28];
     if (extra_field_len > 0) {
       std::vector<char> buff(extra_field_len);
-            fs.read(&buff[0], extra_field_len);
+      fs.read(&buff[0], extra_field_len);
     }
 
     uint16_t compr_method = *reinterpret_cast<uint16_t*>(&local_header[0] + 8);
