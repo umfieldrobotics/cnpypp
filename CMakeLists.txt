@@ -2,14 +2,14 @@ CMAKE_MINIMUM_REQUIRED(VERSION 3.10)
 
 project(CNPYpp)
 
-option(ENABLE_STATIC "Build static (.a) library" ON)
+option(ENABLE_STATIC "Build static (.a) library" OFF)
 
 find_package(ZLIB REQUIRED)
 FIND_PACKAGE(Boost COMPONENTS filesystem REQUIRED)
 
 include_directories(${ZLIB_INCLUDE_DIRS})
 
-add_library(cnpy++ SHARED "cnpy.cpp")
+add_library(cnpy++ SHARED "cnpy++.cpp")
 target_compile_features(cnpy++ PUBLIC cxx_std_17)
 target_include_directories(cnpy++ PUBLIC ${Boost_INCLUDE_DIR} ${ZLIB_INCLUDE_DIRS})
 target_link_libraries(cnpy++ ${ZLIB_LIBRARIES} Boost::filesystem)
@@ -22,7 +22,7 @@ if(ENABLE_STATIC)
     install(TARGETS "cnpy++-static" ARCHIVE DESTINATION lib)
 endif(ENABLE_STATIC)
 
-install(FILES "cnpy.hpp" DESTINATION include)
+install(FILES "cnpy++.hpp" DESTINATION include)
 
 add_executable(example1 example1.cpp)
 target_link_libraries(example1 cnpy++)

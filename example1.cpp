@@ -1,4 +1,4 @@
-#include "cnpy.hpp"
+#include "cnpy++.hpp"
 
 #include <algorithm>
 #include <cstdlib>
