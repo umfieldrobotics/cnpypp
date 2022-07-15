@@ -136,7 +136,7 @@ void npy_save(std::string const& fname, TConstInputIterator start,
   using value_type =
       typename std::iterator_traits<TConstInputIterator>::value_type;
 
-  if (mode == "a") {
+  if (mode == "a" && boost::filesystem::exists(fname)) {
     // file exists. we need to append to it. read the header, modify the array
     // size
     fs.open(fname,
