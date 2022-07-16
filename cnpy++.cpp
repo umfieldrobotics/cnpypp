@@ -71,23 +71,6 @@ std::vector<char>& cnpypp::append(std::vector<char>& vec, std::string_view view)
   return vec;
 }
 
-template <>
-std::vector<char>& cnpypp::operator+=(std::vector<char>& lhs, std::string rhs) {
-  lhs.insert(lhs.end(), rhs.begin(), rhs.end());
-  return lhs;
-}
-
-template <>
-std::vector<char>& cnpypp::operator+=(std::vector<char>& lhs, const char* rhs) {
-  // write in little endian
-  size_t len = strlen(rhs);
-  lhs.reserve(lhs.size() + len);
-  for (size_t byte = 0; byte < len; byte++) {
-    lhs.push_back(rhs[byte]);
-  }
-  return lhs;
-}
-
 void cnpypp::parse_npy_header(std::istream::char_type* buffer, size_t& word_size,
                             std::vector<size_t>& shape, cnpypp::MemoryOrder& memory_order) {
   // std::string magic_string(buffer,6);

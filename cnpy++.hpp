@@ -100,17 +100,25 @@ private:
 using npz_t = std::map<std::string, NpyArray>;
 
 char BigEndianTest();
+
 char map_type(const std::type_info& t);
+
 template <typename T>
 std::vector<char> create_npy_header(const std::vector<size_t>& shape, MemoryOrder=MemoryOrder::C);
+
 void parse_npy_header(std::istream&, size_t& word_size,
                       std::vector<size_t>& shape, MemoryOrder& memory_order);
+
 void parse_npy_header(std::istream::char_type* buffer, size_t& word_size,
                       std::vector<size_t>& shape, MemoryOrder& memory_order);
+
 void parse_zip_footer(std::istream& fp, uint16_t& nrecs,
                       size_t& global_header_size, size_t& global_header_offset);
+
 npz_t npz_load(std::string const& fname);
+
 NpyArray npz_load(std::string const& fname, std::string const& varname);
+
 NpyArray npy_load(std::string const& fname);
 
 template <typename TConstInputIterator>
@@ -127,11 +135,6 @@ std::vector<char>& operator+=(std::vector<char>& lhs, const T rhs) {
 }
 
 std::vector<char>& append(std::vector<char>&, std::string_view);
-
-template <>
-std::vector<char>& operator+=(std::vector<char>& lhs, std::string rhs);
-template <>
-std::vector<char>& operator+=(std::vector<char>& lhs, const char* rhs);
 
 template <typename TConstInputIterator>
 void npy_save(std::string const& fname, TConstInputIterator start,
