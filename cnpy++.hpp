@@ -25,12 +25,19 @@
 #include <boost/filesystem.hpp>
 #include <zlib.h>
 
-namespace cnpy {
+namespace cnpypp {
+enum class MemoryOrder {
+    Fortran,
+    C,
+    ColumnMajor = Fortran,
+    RowMajor = C
+};
+
 struct NpyArray {
   NpyArray(std::vector<size_t> const& _shape, size_t _word_size,
-           bool _fortran_order, std::unique_ptr<uint8_t[]>&& _buffer,
+           MemoryOrder _memory_order, std::unique_ptr<uint8_t[]>&& _buffer,
            size_t _buffer_length)
-      : shape{_shape}, word_size{_word_size}, fortran_order{_fortran_order},
+      : shape{_shape}, word_size{_word_size}, memory_order{_memory_order},
         num_vals{std::accumulate(shape.begin(), shape.end(), size_t{1},
                                  std::multiplies<size_t>())},
         offset{_buffer_length - num_vals * _word_size}, buffer{std::move(
@@ -38,12 +45,12 @@ struct NpyArray {
 
   NpyArray(NpyArray&& other)
       : shape{std::move(other.shape)}, word_size{other.word_size},
-        fortran_order{other.fortran_order}, num_vals{other.num_vals},
+        memory_order{other.memory_order}, num_vals{other.num_vals},
         offset{other.offset}, buffer{std::move(other.buffer)} {}
 
   NpyArray(std::vector<size_t> const& _shape, size_t _word_size,
-           bool _fortran_order)
-      : NpyArray{_shape, _word_size, _fortran_order,
+           MemoryOrder _memory_order)
+      : NpyArray{_shape, _word_size, _memory_order,
                  std::make_unique<uint8_t[]>(
                      std::accumulate(_shape.begin(), _shape.end(), _word_size,
                                      std::multiplies<size_t>())),
@@ -64,7 +71,7 @@ struct NpyArray {
 
   bool compare_metadata(NpyArray const& other) const {
     return shape == other.shape && word_size == other.word_size &&
-           fortran_order == other.fortran_order;
+           memory_order == other.memory_order;
   }
 
   bool operator==(NpyArray const& other) const {
@@ -82,7 +89,7 @@ struct NpyArray {
 
   std::vector<size_t> const shape;
   size_t const word_size;
-  bool const fortran_order;
+  MemoryOrder const memory_order;
   size_t const num_vals;
   size_t const offset;
 
@@ -97,9 +104,9 @@ char map_type(const std::type_info& t);
 template <typename T>
 std::vector<char> create_npy_header(const std::vector<size_t>& shape);
 void parse_npy_header(std::istream&, size_t& word_size,
-                      std::vector<size_t>& shape, bool& fortran_order);
+                      std::vector<size_t>& shape, MemoryOrder& memory_order);
 void parse_npy_header(std::istream::char_type* buffer, size_t& word_size,
-                      std::vector<size_t>& shape, bool& fortran_order);
+                      std::vector<size_t>& shape, MemoryOrder& memory_order);
 void parse_zip_footer(std::istream& fp, uint16_t& nrecs,
                       size_t& global_header_size, size_t& global_header_offset);
 npz_t npz_load(std::string const& fname);
@@ -143,9 +150,9 @@ void npy_save(std::string const& fname, TConstInputIterator start,
             std::ios_base::binary | std::ios_base::in | std::ios_base::out);
 
     size_t word_size;
-    bool fortran_order;
-    parse_npy_header(fs, word_size, true_data_shape, fortran_order);
-    if (fortran_order) {
+    MemoryOrder memory_order;
+    parse_npy_header(fs, word_size, true_data_shape, memory_order);
+    if (memory_order != MemoryOrder::C) {
       throw std::runtime_error{
           "libnpy error: cannot append to file in Fortran order"};
     }
@@ -375,4 +382,4 @@ std::vector<char> create_npy_header(const std::vector<size_t>& shape) {
   return header;
 }
 
-} // namespace cnpy
+} // namespace cnpypp

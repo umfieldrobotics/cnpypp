@@ -5,6 +5,8 @@
 
 #include "cnpy++.hpp"
 #include <algorithm>
+#include <iostream>
+#include <iomanip>
 #include <complex>
 #include <cstdlib>
 #include <cstring>
@@ -13,12 +15,12 @@
 #include <stdexcept>
 #include <stdint.h>
 
-char cnpy::BigEndianTest() {
+char cnpypp::BigEndianTest() {
   int x = 1;
   return (((char*)&x)[0]) ? '<' : '>';
 }
 
-char cnpy::map_type(const std::type_info& t) {
+char cnpypp::map_type(const std::type_info& t) {
   if (t == typeid(float))
     return 'f';
   if (t == typeid(double))
@@ -58,23 +60,25 @@ char cnpy::map_type(const std::type_info& t) {
   if (t == typeid(std::complex<long double>))
     return 'c';
 
-  else
+  else {
+    std::cerr << "cannot map " << std::quoted(t.name()) << "\n";
     return '?';
+  }
 }
 
-std::vector<char>& cnpy::append(std::vector<char>& vec, std::string_view view) {
+std::vector<char>& cnpypp::append(std::vector<char>& vec, std::string_view view) {
   vec.insert(vec.end(), view.begin(), view.end());
   return vec;
 }
 
 template <>
-std::vector<char>& cnpy::operator+=(std::vector<char>& lhs, std::string rhs) {
+std::vector<char>& cnpypp::operator+=(std::vector<char>& lhs, std::string rhs) {
   lhs.insert(lhs.end(), rhs.begin(), rhs.end());
   return lhs;
 }
 
 template <>
-std::vector<char>& cnpy::operator+=(std::vector<char>& lhs, const char* rhs) {
+std::vector<char>& cnpypp::operator+=(std::vector<char>& lhs, const char* rhs) {
   // write in little endian
   size_t len = strlen(rhs);
   lhs.reserve(lhs.size() + len);
@@ -84,8 +88,8 @@ std::vector<char>& cnpy::operator+=(std::vector<char>& lhs, const char* rhs) {
   return lhs;
 }
 
-void cnpy::parse_npy_header(std::istream::char_type* buffer, size_t& word_size,
-                            std::vector<size_t>& shape, bool& fortran_order) {
+void cnpypp::parse_npy_header(std::istream::char_type* buffer, size_t& word_size,
+                            std::vector<size_t>& shape, cnpypp::MemoryOrder& memory_order) {
   // std::string magic_string(buffer,6);
   uint8_t major_version = *reinterpret_cast<uint8_t*>(buffer + 6);
   uint8_t minor_version = *reinterpret_cast<uint8_t*>(buffer + 7);
@@ -96,7 +100,7 @@ void cnpy::parse_npy_header(std::istream::char_type* buffer, size_t& word_size,
 
   // fortran order
   loc1 = header.find("fortran_order") + 16;
-  fortran_order = (header.substr(loc1, 4) == "True" ? true : false);
+  memory_order = (header.substr(loc1, 4) == "True" ? cnpypp::MemoryOrder::Fortran : cnpypp::MemoryOrder::C);
 
   // shape
   loc1 = header.find("(");
@@ -128,8 +132,8 @@ void cnpy::parse_npy_header(std::istream::char_type* buffer, size_t& word_size,
   word_size = atoi(str_ws.substr(0, loc2).c_str());
 }
 
-void cnpy::parse_npy_header(std::istream& fs, size_t& word_size,
-                            std::vector<size_t>& shape, bool& fortran_order) {
+void cnpypp::parse_npy_header(std::istream& fs, size_t& word_size,
+                            std::vector<size_t>& shape, cnpypp::MemoryOrder& memory_order) {
   fs.seekg(11, std::ios_base::cur);
 
   auto const pos = fs.tellg();
@@ -149,7 +153,7 @@ void cnpy::parse_npy_header(std::istream& fs, size_t& word_size,
     throw std::runtime_error(
         "parse_npy_header: failed to find header keyword: 'fortran_order'");
   loc1 += 16;
-  fortran_order = header.substr(loc1, 4) == "True";
+  memory_order = (header.substr(loc1, 4) == "True") ? cnpypp::MemoryOrder::Fortran : cnpypp::MemoryOrder::C;
 
   // shape
   loc1 = header.find("(");
@@ -188,7 +192,7 @@ void cnpy::parse_npy_header(std::istream& fs, size_t& word_size,
   word_size = atoi(str_ws.substr(0, loc2).c_str());
 }
 
-void cnpy::parse_zip_footer(std::istream& fs, uint16_t& nrecs,
+void cnpypp::parse_zip_footer(std::istream& fs, uint16_t& nrecs,
                             size_t& global_header_size,
                             size_t& global_header_offset) {
   std::vector<char> footer(22);
@@ -210,18 +214,18 @@ void cnpy::parse_zip_footer(std::istream& fs, uint16_t& nrecs,
   assert(comment_len == 0);
 }
 
-cnpy::NpyArray load_the_npy_file(std::istream& fs) {
+cnpypp::NpyArray load_the_npy_file(std::istream& fs) {
   std::vector<size_t> shape;
   size_t word_size;
-  bool fortran_order;
-  cnpy::parse_npy_header(fs, word_size, shape, fortran_order);
+  cnpypp::MemoryOrder memory_order;
+  cnpypp::parse_npy_header(fs, word_size, shape, memory_order);
 
-  cnpy::NpyArray arr(shape, word_size, fortran_order);
+  cnpypp::NpyArray arr(shape, word_size, memory_order);
   fs.read(arr.data<char>(), arr.num_bytes());
   return arr;
 }
 
-cnpy::NpyArray load_the_npz_array(std::istream& fs, uint32_t compr_bytes,
+cnpypp::NpyArray load_the_npz_array(std::istream& fs, uint32_t compr_bytes,
                                   uint32_t uncompr_bytes) {
 
   std::vector<std::istream::char_type> buffer_compr(compr_bytes);
@@ -248,10 +252,10 @@ cnpy::NpyArray load_the_npz_array(std::istream& fs, uint32_t compr_bytes,
 
   std::vector<size_t> shape;
   size_t word_size;
-  bool fortran_order;
-  cnpy::parse_npy_header(&buffer_uncompr[0], word_size, shape, fortran_order);
+  cnpypp::MemoryOrder memory_order;
+  cnpypp::parse_npy_header(&buffer_uncompr[0], word_size, shape, memory_order);
 
-  cnpy::NpyArray array(shape, word_size, fortran_order);
+  cnpypp::NpyArray array(shape, word_size, memory_order);
 
   size_t offset = uncompr_bytes - array.num_bytes();
   memcpy(array.data<unsigned char>(), &buffer_uncompr[0] + offset,
@@ -260,7 +264,7 @@ cnpy::NpyArray load_the_npz_array(std::istream& fs, uint32_t compr_bytes,
   return array;
 }
 
-cnpy::npz_t cnpy::npz_load(std::string const& fname) {
+cnpypp::npz_t cnpypp::npz_load(std::string const& fname) {
   std::ifstream fs{fname, std::ios::binary};
 
   if (!fs) {
@@ -268,7 +272,7 @@ cnpy::npz_t cnpy::npz_load(std::string const& fname) {
                              "!");
   }
 
-  cnpy::npz_t arrays;
+  cnpypp::npz_t arrays;
 
   while (1) {
     std::vector<std::ifstream::char_type> local_header(30);
@@ -309,7 +313,7 @@ cnpy::npz_t cnpy::npz_load(std::string const& fname) {
   return arrays;
 }
 
-cnpy::NpyArray cnpy::npz_load(std::string const& fname,
+cnpypp::NpyArray cnpypp::npz_load(std::string const& fname,
                               std::string const& varname) {
   std::ifstream fs(fname, std::ios::binary);
 
@@ -356,7 +360,7 @@ cnpy::NpyArray cnpy::npz_load(std::string const& fname,
                            " not found in " + fname);
 }
 
-cnpy::NpyArray cnpy::npy_load(std::string const& fname) {
+cnpypp::NpyArray cnpypp::npy_load(std::string const& fname) {
 
   std::ifstream fs{fname, std::ios::binary};
 

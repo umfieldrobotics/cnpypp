@@ -23,12 +23,12 @@ int main() {
   });
 
   // save it to file
-  cnpy::npy_save("arr1.npy", &data[0], shape, "w");
-  cnpy::npy_save("arr1-cpy.npy", data.cbegin(), shape, "w");
+  cnpypp::npy_save("arr1.npy", &data[0], shape, "w");
+  cnpypp::npy_save("arr1-cpy.npy", data.cbegin(), shape, "w");
 
   // load it into a new array
   {
-    cnpy::NpyArray const arr = cnpy::npy_load("arr1.npy");
+    cnpypp::NpyArray const arr = cnpypp::npy_load("arr1.npy");
     auto const* const loaded_data = arr.data<uint32_t>();
 
     // make sure the loaded data matches the saved data
@@ -51,10 +51,10 @@ int main() {
 
   // append the same data to file
   // npy array on file now has shape (Nz+Nz,Ny,Nx)
-  cnpy::npy_save("arr1.npy", data.cbegin(), shape, "a");
+  cnpypp::npy_save("arr1.npy", data.cbegin(), shape, "a");
 
   {
-    cnpy::NpyArray const arr = cnpy::npy_load("arr1.npy");
+    cnpypp::NpyArray const arr = cnpypp::npy_load("arr1.npy");
     auto const* const loaded_data = arr.data<uint32_t>();
 
     // make sure the loaded data matches the saved data
@@ -93,10 +93,10 @@ int main() {
 
   // now write to an npz file
   {
-    cnpy::npz_save("out.npz", "str", str1.cbegin(), {str1.size()}, "w");
+    cnpypp::npz_save("out.npz", "str", str1.cbegin(), {str1.size()}, "w");
 
     // load str1 back from npz file
-    cnpy::NpyArray arr = cnpy::npz_load("out.npz", "str");
+    cnpypp::NpyArray arr = cnpypp::npz_load("out.npz", "str");
     auto const* const loaded_data = arr.data<char>();
 
     // make sure the loaded data matches the saved data
@@ -118,10 +118,10 @@ int main() {
 
   // append to npz
   {
-    cnpy::npz_save("out.npz", "str2", str2.cbegin(), {str2.size()}, "a");
+    cnpypp::npz_save("out.npz", "str2", str2.cbegin(), {str2.size()}, "a");
 
     // load str2 back from npz file
-    cnpy::NpyArray arr = cnpy::npz_load("out.npz", "str2");
+    cnpypp::NpyArray arr = cnpypp::npz_load("out.npz", "str2");
     auto const* const loaded_data = arr.data<char>();
 
     // make sure the loaded data matches the saved data
@@ -144,9 +144,9 @@ int main() {
 
   // load the entire npz file
   {
-    cnpy::npz_t my_npz = cnpy::npz_load("out.npz");
+    cnpypp::npz_t my_npz = cnpypp::npz_load("out.npz");
 
-    cnpy::NpyArray const& arr = my_npz.find("str")->second;
+    cnpypp::NpyArray const& arr = my_npz.find("str")->second;
     char const* const loaded_str = arr.data<char>();
 
     // make sure the loaded data matches the saved data
