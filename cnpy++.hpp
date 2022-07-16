@@ -102,7 +102,7 @@ using npz_t = std::map<std::string, NpyArray>;
 char BigEndianTest();
 char map_type(const std::type_info& t);
 template <typename T>
-std::vector<char> create_npy_header(const std::vector<size_t>& shape);
+std::vector<char> create_npy_header(const std::vector<size_t>& shape, MemoryOrder=MemoryOrder::C);
 void parse_npy_header(std::istream&, size_t& word_size,
                       std::vector<size_t>& shape, MemoryOrder& memory_order);
 void parse_npy_header(std::istream::char_type* buffer, size_t& word_size,
@@ -350,13 +350,15 @@ void npz_save(std::string const& zipname, std::string_view fname,
 }
 
 template <typename T>
-std::vector<char> create_npy_header(const std::vector<size_t>& shape) {
+std::vector<char> create_npy_header(const std::vector<size_t>& shape, MemoryOrder memory_order) {
   std::vector<char> dict;
   append(dict, "{'descr': '");
   dict += BigEndianTest();
   dict += map_type(typeid(T));
   append(dict, std::to_string(sizeof(T)));
-  append(dict, "', 'fortran_order': False, 'shape': (");
+  append(dict, "', 'fortran_order': ");
+  append(dict, (memory_order == MemoryOrder::C) ? "False" : "True");
+  append(dict, ", 'shape': (");
   append(dict, std::to_string(shape[0]));
   for (size_t i = 1; i < shape.size(); i++) {
     append(dict, ", ");
