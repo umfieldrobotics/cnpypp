@@ -26,12 +26,7 @@
 #include <zlib.h>
 
 namespace cnpypp {
-enum class MemoryOrder {
-    Fortran,
-    C,
-    ColumnMajor = Fortran,
-    RowMajor = C
-};
+enum class MemoryOrder { Fortran, C, ColumnMajor = Fortran, RowMajor = C };
 
 struct NpyArray {
   NpyArray(std::vector<size_t> const& _shape, size_t _word_size,
@@ -104,7 +99,8 @@ char BigEndianTest();
 char map_type(const std::type_info& t);
 
 template <typename T>
-std::vector<char> create_npy_header(const std::vector<size_t>& shape, MemoryOrder=MemoryOrder::C);
+std::vector<char> create_npy_header(const std::vector<size_t>& shape,
+                                    MemoryOrder = MemoryOrder::C);
 
 void parse_npy_header(std::istream&, size_t& word_size,
                       std::vector<size_t>& shape, MemoryOrder& memory_order);
@@ -138,7 +134,8 @@ std::vector<char>& append(std::vector<char>&, std::string_view);
 
 template <typename TConstInputIterator>
 void npy_save(std::string const& fname, TConstInputIterator start,
-              std::vector<size_t> const& shape, std::string_view mode = "w") {
+              std::vector<size_t> const& shape, std::string_view mode = "w",
+              MemoryOrder memory_order = MemoryOrder::C) {
   std::fstream fs;
   std::vector<size_t>
       true_data_shape; // if appending, the shape of existing + new data
@@ -153,11 +150,11 @@ void npy_save(std::string const& fname, TConstInputIterator start,
             std::ios_base::binary | std::ios_base::in | std::ios_base::out);
 
     size_t word_size;
-    MemoryOrder memory_order;
-    parse_npy_header(fs, word_size, true_data_shape, memory_order);
-    if (memory_order != MemoryOrder::C) {
+    MemoryOrder memory_order_exist;
+    parse_npy_header(fs, word_size, true_data_shape, memory_order_exist);
+    if (memory_order != memory_order_exist) {
       throw std::runtime_error{
-          "libnpy error: cannot append to file in Fortran order"};
+          "libcnpy++ error in npy_save(): memory order does not match"};
     }
 
     if (word_size != sizeof(value_type)) {
@@ -191,7 +188,7 @@ void npy_save(std::string const& fname, TConstInputIterator start,
   }
 
   std::vector<char> const header =
-      create_npy_header<value_type>(true_data_shape);
+      create_npy_header<value_type>(true_data_shape, memory_order);
   size_t const nels =
       std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<size_t>());
 
@@ -231,7 +228,8 @@ void write_data(TConstInputIterator start, size_t nels, std::ostream& fs) {
 template <typename TConstInputIterator>
 void npz_save(std::string const& zipname, std::string fname,
               TConstInputIterator start, const std::vector<size_t>& shape,
-              std::string_view mode = "w") {
+              std::string_view mode = "w",
+              MemoryOrder memory_order = MemoryOrder::C) {
   using value_type =
       typename std::iterator_traits<TConstInputIterator>::value_type;
 
@@ -266,7 +264,8 @@ void npz_save(std::string const& zipname, std::string fname,
     fs.open(zipname, std::ios_base::out | std::ios_base::binary);
   }
 
-  std::vector<char> npy_header = create_npy_header<value_type>(shape);
+  std::vector<char> npy_header =
+      create_npy_header<value_type>(shape, memory_order);
 
   size_t nels =
       std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<size_t>());
@@ -316,7 +315,7 @@ void npz_save(std::string const& zipname, std::string fname,
 
   // build footer
   std::vector<char> footer;
-  append(footer, "PK");                           // first part of sig
+  append(footer, "PK");                     // first part of sig
   footer += (uint16_t)0x0605;               // second part of sig
   footer += (uint16_t)0;                    // number of this disk
   footer += (uint16_t)0;                    // disk where footer starts
@@ -327,7 +326,7 @@ void npz_save(std::string const& zipname, std::string fname,
                        local_header.size()); // offset of start of global
                                              // headers, since global header now
                                              // starts after newly written array
-  footer += (uint16_t)0; // zip file comment length
+  footer += (uint16_t)0;                     // zip file comment length
 
   // write everything
   fs.write(&local_header[0], sizeof(char) * local_header.size());
@@ -353,7 +352,8 @@ void npz_save(std::string const& zipname, std::string_view fname,
 }
 
 template <typename T>
-std::vector<char> create_npy_header(const std::vector<size_t>& shape, MemoryOrder memory_order) {
+std::vector<char> create_npy_header(const std::vector<size_t>& shape,
+                                    MemoryOrder memory_order) {
   std::vector<char> dict;
   append(dict, "{'descr': '");
   dict += BigEndianTest();
