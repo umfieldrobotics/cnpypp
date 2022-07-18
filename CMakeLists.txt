@@ -15,6 +15,12 @@ add_library(cnpy++ SHARED "cnpy++.cpp")
 target_compile_features(cnpy++ PUBLIC cxx_std_17)
 target_include_directories(cnpy++ PUBLIC ${Boost_INCLUDE_DIR} ${ZLIB_INCLUDE_DIRS})
 target_link_libraries(cnpy++ ${ZLIB_LIBRARIES} Boost::filesystem)
+if(MSVC)
+  target_compile_options(cnpy++ PRIVATE /W4 /WX)
+else()
+  target_compile_options(cnpy++ PRIVATE -Wall -Wextra -pedantic)
+endif()
+
 
 install(TARGETS "cnpy++" LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
 install(FILES "cnpy++.hpp" DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
