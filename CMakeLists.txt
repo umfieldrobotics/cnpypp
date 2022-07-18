@@ -20,7 +20,7 @@ install(TARGETS "cnpy++" LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
 install(FILES "cnpy++.hpp" DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
 if(ENABLE_STATIC)
-    add_library(cnpy++-static STATIC "cnpy.cpp")
+    add_library(cnpy++-static STATIC "cnpy++.cpp")
     target_compile_features(cnpy++-static PUBLIC cxx_std_17)
     set_target_properties(cnpy++-static PROPERTIES OUTPUT_NAME "cnpy++")
     install(TARGETS "cnpy++-static" ARCHIVE DESTINATION lib)
