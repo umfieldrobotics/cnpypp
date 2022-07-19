@@ -1,4 +1,4 @@
-// Copyright (C) 2011  Carl Rogers
+// Copyright (C) 2011  Carl Rogers, 2020-2022 Maximilian Reininghaus
 // Released under MIT License
 // license available in LICENSE file, or at
 // http://www.opensource.org/licenses/mit-license.php
