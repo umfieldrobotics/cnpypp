@@ -30,6 +30,15 @@ int npy_save(char const* fname, enum cnpypp_data_type, void const* start,
 int npy_save_1d(char const* fname, enum cnpypp_data_type, void const* start,
               size_t const num_elem, char const* mode);
 
+int npz_save(char const* zipname, char const* fname, enum cnpypp_data_type dtype,
+              void const* data, size_t const* shape, size_t rank,
+              char const* mode,
+              enum cnpypp_memory_order);
+              
+int npz_save_1d(char const* zipname, char const* fname, enum cnpypp_data_type dtype,
+              void const* data, size_t num_elem,
+              char const* mode);
+
 
 #ifdef __cplusplus
 }

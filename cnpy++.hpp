@@ -101,9 +101,9 @@ private:
 
 using npz_t = std::map<std::string, NpyArray>;
 
-char BigEndianTest();
-
 char map_type(const std::type_info& t);
+
+char BigEndianTest();
 
 template <typename T>
 std::vector<char> create_npy_header(const std::vector<size_t>& shape,
