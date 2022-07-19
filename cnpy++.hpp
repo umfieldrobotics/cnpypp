@@ -25,8 +25,15 @@
 #include <boost/filesystem.hpp>
 #include <zlib.h>
 
+#include <cnpy++.h>
+
 namespace cnpypp {
-enum class MemoryOrder { Fortran, C, ColumnMajor = Fortran, RowMajor = C };
+enum class MemoryOrder {
+  Fortran = cnpypp_memory_order_fortran,
+  C = cnpypp_memory_order_c,
+  ColumnMajor = Fortran,
+  RowMajor = C
+};
 
 struct NpyArray {
   NpyArray(std::vector<size_t> const& _shape, size_t _word_size,

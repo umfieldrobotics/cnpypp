@@ -5,12 +5,12 @@
 
 #include "cnpy++.hpp"
 #include <algorithm>
-#include <iostream>
-#include <iomanip>
 #include <complex>
 #include <cstdlib>
 #include <cstring>
 #include <iomanip>
+#include <iostream>
+#include <iterator>
 #include <regex>
 #include <stdexcept>
 #include <stdint.h>
@@ -66,30 +66,37 @@ char cnpypp::map_type(const std::type_info& t) {
   }
 }
 
-std::vector<char>& cnpypp::append(std::vector<char>& vec, std::string_view view) {
+std::vector<char>& cnpypp::append(std::vector<char>& vec,
+                                  std::string_view view) {
   vec.insert(vec.end(), view.begin(), view.end());
   return vec;
 }
 
-void cnpypp::parse_npy_header(std::istream::char_type* buffer, size_t& word_size,
-                            std::vector<size_t>& shape, cnpypp::MemoryOrder& memory_order) {
+static std::regex const num_regex("[0-9][0-9]*");
+
+void cnpypp::parse_npy_header(std::istream::char_type* buffer,
+                              size_t& word_size, std::vector<size_t>& shape,
+                              cnpypp::MemoryOrder& memory_order) {
   // std::string magic_string(buffer,6);
-  uint8_t major_version = *reinterpret_cast<uint8_t*>(buffer + 6);
-  uint8_t minor_version = *reinterpret_cast<uint8_t*>(buffer + 7);
-  uint16_t header_len = *reinterpret_cast<uint16_t*>(buffer + 8);
+  [[maybe_unused]] uint8_t const major_version =
+      *reinterpret_cast<uint8_t*>(buffer + 6);
+  [[maybe_unused]] uint8_t const minor_version =
+      *reinterpret_cast<uint8_t*>(buffer + 7);
+  uint16_t const header_len = *reinterpret_cast<uint16_t*>(buffer + 8);
   std::string header(reinterpret_cast<char*>(buffer + 9), header_len);
 
   size_t loc1, loc2;
 
   // fortran order
   loc1 = header.find("fortran_order") + 16;
-  memory_order = (header.substr(loc1, 4) == "True" ? cnpypp::MemoryOrder::Fortran : cnpypp::MemoryOrder::C);
+  memory_order =
+      (header.substr(loc1, 4) == "True" ? cnpypp::MemoryOrder::Fortran
+                                        : cnpypp::MemoryOrder::C);
 
   // shape
   loc1 = header.find("(");
   loc2 = header.find(")");
 
-  std::regex num_regex("[0-9][0-9]*");
   std::smatch sm;
   shape.clear();
 
@@ -103,9 +110,12 @@ void cnpypp::parse_npy_header(std::istream::char_type* buffer, size_t& word_size
   // byte order code | stands for not applicable.
   // not sure when this applies except for byte array
   loc1 = header.find("descr") + 9;
-  bool littleEndian =
-      (header[loc1] == '<' || header[loc1] == '|' ? true : false);
-  assert(littleEndian);
+  bool const littleEndian = header[loc1] == '<' || header[loc1] == '|';
+
+  if (!littleEndian) {
+    throw std::runtime_error(
+        "parse_npy_header: data stored in big-endian (not supported)");
+  }
 
   // char type = header[loc1+1];
   // assert(type == map_type(T));
@@ -116,7 +126,8 @@ void cnpypp::parse_npy_header(std::istream::char_type* buffer, size_t& word_size
 }
 
 void cnpypp::parse_npy_header(std::istream& fs, size_t& word_size,
-                            std::vector<size_t>& shape, cnpypp::MemoryOrder& memory_order) {
+                              std::vector<size_t>& shape,
+                              cnpypp::MemoryOrder& memory_order) {
   fs.seekg(11, std::ios_base::cur);
 
   auto const pos = fs.tellg();
@@ -136,7 +147,9 @@ void cnpypp::parse_npy_header(std::istream& fs, size_t& word_size,
     throw std::runtime_error(
         "parse_npy_header: failed to find header keyword: 'fortran_order'");
   loc1 += 16;
-  memory_order = (header.substr(loc1, 4) == "True") ? cnpypp::MemoryOrder::Fortran : cnpypp::MemoryOrder::C;
+  memory_order = (header.substr(loc1, 4) == "True")
+                     ? cnpypp::MemoryOrder::Fortran
+                     : cnpypp::MemoryOrder::C;
 
   // shape
   loc1 = header.find("(");
@@ -145,7 +158,6 @@ void cnpypp::parse_npy_header(std::istream& fs, size_t& word_size,
     throw std::runtime_error(
         "parse_npy_header: failed to find header keyword: '(' or ')'");
 
-  std::regex num_regex("[0-9][0-9]*");
   std::smatch sm;
   shape.clear();
 
@@ -163,9 +175,11 @@ void cnpypp::parse_npy_header(std::istream& fs, size_t& word_size,
     throw std::runtime_error(
         "parse_npy_header: failed to find header keyword: 'descr'");
   loc1 += 9;
-  bool littleEndian =
-      (header[loc1] == '<' || header[loc1] == '|' ? true : false);
-  assert(littleEndian);
+  bool const littleEndian = header[loc1] == '<' || header[loc1] == '|';
+  if (!littleEndian) {
+    throw std::runtime_error(
+        "parse_npy_header: data stored in big-endian (not supported)");
+  }
 
   // char type = header[loc1+1];
   // assert(type == map_type(T));
@@ -176,13 +190,13 @@ void cnpypp::parse_npy_header(std::istream& fs, size_t& word_size,
 }
 
 void cnpypp::parse_zip_footer(std::istream& fs, uint16_t& nrecs,
-                            size_t& global_header_size,
-                            size_t& global_header_offset) {
+                              size_t& global_header_size,
+                              size_t& global_header_offset) {
   std::vector<char> footer(22);
   fs.seekg(-22, std::ios_base::end);
   fs.read(&footer[0], sizeof(char) * 22);
 
-  uint16_t disk_no, disk_start, nrecs_on_disk, comment_len;
+  [[maybe_unused]] uint16_t disk_no, disk_start, nrecs_on_disk, comment_len;
   disk_no = *(uint16_t*)&footer[4];
   disk_start = *(uint16_t*)&footer[6];
   nrecs_on_disk = *(uint16_t*)&footer[8];
@@ -191,10 +205,10 @@ void cnpypp::parse_zip_footer(std::istream& fs, uint16_t& nrecs,
   global_header_offset = *(uint32_t*)&footer[16];
   comment_len = *(uint16_t*)&footer[20];
 
-  assert(disk_no == 0);
-  assert(disk_start == 0);
-  assert(nrecs_on_disk == nrecs);
-  assert(comment_len == 0);
+  if (disk_no != 0 || disk_start != 0 || nrecs_on_disk != nrecs ||
+      comment_len != 0) {
+    throw std::runtime_error("parse_zip_footer: unexpected data");
+  }
 }
 
 cnpypp::NpyArray load_the_npy_file(std::istream& fs) {
@@ -209,13 +223,13 @@ cnpypp::NpyArray load_the_npy_file(std::istream& fs) {
 }
 
 cnpypp::NpyArray load_the_npz_array(std::istream& fs, uint32_t compr_bytes,
-                                  uint32_t uncompr_bytes) {
+                                    uint32_t uncompr_bytes) {
 
   std::vector<std::istream::char_type> buffer_compr(compr_bytes);
   std::vector<std::istream::char_type> buffer_uncompr(uncompr_bytes);
   fs.read(&buffer_compr[0], compr_bytes);
 
-  int err;
+  [[maybe_unused]] int err;
   z_stream d_stream;
 
   d_stream.zalloc = Z_NULL;
@@ -297,7 +311,7 @@ cnpypp::npz_t cnpypp::npz_load(std::string const& fname) {
 }
 
 cnpypp::NpyArray cnpypp::npz_load(std::string const& fname,
-                              std::string const& varname) {
+                                  std::string const& varname) {
   std::ifstream fs(fname, std::ios::binary);
 
   if (!fs)
@@ -353,4 +367,73 @@ cnpypp::NpyArray cnpypp::npy_load(std::string const& fname) {
   NpyArray arr = load_the_npy_file(fs);
 
   return arr;
+}
+
+// for C compatibility
+int npy_save(char const* fname, cnpypp_data_type dtype, void const* start,
+             size_t const* shape, size_t rank, char const* mode,
+             enum cnpypp_memory_order memory_order) {
+  std::string const filename = fname;
+  std::vector<size_t> shapeVec{};
+  shapeVec.reserve(rank);
+  std::copy_n(shape, rank, std::back_inserter(shapeVec));
+
+  switch (dtype) {
+  case cnpypp_int8:
+    cnpypp::npy_save(filename, reinterpret_cast<int8_t const*>(start), shapeVec,
+                     mode, static_cast<cnpypp::MemoryOrder>(memory_order));
+    break;
+  case cnpypp_uint8:
+    cnpypp::npy_save(filename, reinterpret_cast<uint8_t const*>(start),
+                     shapeVec, mode,
+                     static_cast<cnpypp::MemoryOrder>(memory_order));
+    break;
+  case cnpypp_int16:
+    cnpypp::npy_save(filename, reinterpret_cast<int16_t const*>(start),
+                     shapeVec, mode,
+                     static_cast<cnpypp::MemoryOrder>(memory_order));
+    break;
+  case cnpypp_uint16:
+    cnpypp::npy_save(filename, reinterpret_cast<uint16_t const*>(start),
+                     shapeVec, mode,
+                     static_cast<cnpypp::MemoryOrder>(memory_order));
+    break;
+  case cnpypp_int32:
+    cnpypp::npy_save(filename, reinterpret_cast<int32_t const*>(start),
+                     shapeVec, mode,
+                     static_cast<cnpypp::MemoryOrder>(memory_order));
+    break;
+  case cnpypp_uint32:
+    cnpypp::npy_save(filename, reinterpret_cast<uint32_t const*>(start),
+                     shapeVec, mode,
+                     static_cast<cnpypp::MemoryOrder>(memory_order));
+    break;
+  case cnpypp_int64:
+    cnpypp::npy_save(filename, reinterpret_cast<int64_t const*>(start),
+                     shapeVec, mode,
+                     static_cast<cnpypp::MemoryOrder>(memory_order));
+    break;
+  case cnpypp_uint64:
+    cnpypp::npy_save(filename, reinterpret_cast<uint64_t const*>(start),
+                     shapeVec, mode,
+                     static_cast<cnpypp::MemoryOrder>(memory_order));
+    break;
+  case cnpypp_float32:
+    cnpypp::npy_save(filename, reinterpret_cast<float const*>(start), shapeVec,
+                     mode, static_cast<cnpypp::MemoryOrder>(memory_order));
+    break;
+  case cnpypp_float64:
+    cnpypp::npy_save(filename, reinterpret_cast<double const*>(start), shapeVec,
+                     mode, static_cast<cnpypp::MemoryOrder>(memory_order));
+    break;
+  case cnpypp_float128:
+    cnpypp::npy_save(filename, reinterpret_cast<long double const*>(start),
+                     shapeVec, mode,
+                     static_cast<cnpypp::MemoryOrder>(memory_order));
+    break;
+  default:
+    std::cerr << "npy_save: unknown type argument" << std::endl;
+  }
+
+  return 0;
 }
