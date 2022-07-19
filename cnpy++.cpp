@@ -372,9 +372,9 @@ cnpypp::NpyArray cnpypp::npy_load(std::string const& fname) {
 }
 
 // for C compatibility
-int npy_save(char const* fname, cnpypp_data_type dtype, void const* start,
-             size_t const* shape, size_t rank, char const* mode,
-             enum cnpypp_memory_order memory_order) {
+int cnpypp_npy_save(char const* fname, cnpypp_data_type dtype,
+                    void const* start, size_t const* shape, size_t rank,
+                    char const* mode, enum cnpypp_memory_order memory_order) {
   std::string const filename = fname;
   std::vector<size_t> shapeVec{};
   shapeVec.reserve(rank);
@@ -440,10 +440,10 @@ int npy_save(char const* fname, cnpypp_data_type dtype, void const* start,
   return 0;
 }
 
-int npz_save(char const* zipname, char const* filename,
-             enum cnpypp_data_type dtype, void const* data, size_t const* shape,
-             size_t rank, char const* mode,
-             enum cnpypp_memory_order memory_order) {
+int cnpypp_npz_save(char const* zipname, char const* filename,
+                    enum cnpypp_data_type dtype, void const* data,
+                    size_t const* shape, size_t rank, char const* mode,
+                    enum cnpypp_memory_order memory_order) {
   std::vector<size_t> shapeVec{};
   shapeVec.reserve(rank);
   std::copy_n(shape, rank, std::back_inserter(shapeVec));
