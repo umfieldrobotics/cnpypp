@@ -440,7 +440,7 @@ int npy_save(char const* fname, cnpypp_data_type dtype, void const* start,
   return 0;
 }
 
-int npz_save(char const* zipname, char const* fname,
+int npz_save(char const* zipname, char const* filename,
              enum cnpypp_data_type dtype, void const* data, size_t const* shape,
              size_t rank, char const* mode,
              enum cnpypp_memory_order memory_order) {
