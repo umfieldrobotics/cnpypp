@@ -1,3 +1,8 @@
+// Copyright (C) 2022 Maximilian Reininghaus
+// Released under MIT License
+// license available in LICENSE file, or at
+// http://www.opensource.org/licenses/mit-license.php
+
 #ifndef _CNPYPP_H_
 #define _CNPYPP_H_
 

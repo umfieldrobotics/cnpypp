@@ -1,3 +1,8 @@
+// Copyright (C) 2022 Maximilian Reininghaus
+// Released under MIT License
+// license available in LICENSE file, or at
+// http://www.opensource.org/licenses/mit-license.php
+
 #include <cnpy++.h>
 
 int npy_save_1d(char const* fname, enum cnpypp_data_type dtype,
