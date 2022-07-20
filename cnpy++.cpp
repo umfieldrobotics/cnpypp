@@ -304,10 +304,10 @@ cnpypp::npz_t cnpypp::npz_load(std::string const& fname) {
         *reinterpret_cast<uint32_t*>(&local_header[0] + 22);
 
     if (compr_method == 0) {
-      arrays.emplace(varname, std::move(load_the_npy_file(fs)));
+      arrays.emplace(varname, load_the_npy_file(fs));
     } else {
-      arrays.emplace(varname, std::move(load_the_npz_array(fs, compr_bytes,
-                                                           uncompr_bytes)));
+      arrays.emplace(varname,
+                     load_the_npz_array(fs, compr_bytes, uncompr_bytes));
     }
   }
 
@@ -345,10 +345,9 @@ cnpypp::NpyArray cnpypp::npz_load(std::string const& fname,
         *reinterpret_cast<uint32_t*>(&local_header[0] + 22);
 
     if (vname == varname) {
-      NpyArray array = (compr_method == 0)
-                           ? load_the_npy_file(fs)
-                           : load_the_npz_array(fs, compr_bytes, uncompr_bytes);
-      return array;
+      return (compr_method == 0)
+                 ? load_the_npy_file(fs)
+                 : load_the_npz_array(fs, compr_bytes, uncompr_bytes);
     } else {
       // skip past the data
       uint32_t size = *(uint32_t*)&local_header[22];
@@ -362,15 +361,12 @@ cnpypp::NpyArray cnpypp::npz_load(std::string const& fname,
 }
 
 cnpypp::NpyArray cnpypp::npy_load(std::string const& fname) {
-
   std::ifstream fs{fname, std::ios::binary};
 
   if (!fs)
     throw std::runtime_error("npy_load: Unable to open file " + fname);
 
-  NpyArray arr = load_the_npy_file(fs);
-
-  return arr;
+  return load_the_npy_file(fs);
 }
 
 // for C compatibility
