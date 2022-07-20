@@ -212,6 +212,21 @@ void write_data(TConstInputIterator start, size_t nels, std::ostream& fs) {
   using value_type =
       typename std::iterator_traits<TConstInputIterator>::value_type;
 
+  // if it comes from contiguous memory, dump directly in file
+#if __cplusplus >= 202002L
+  if constexpr (std::contiguous_iterator<TConstInputIterator>) {
+#else
+  if constexpr (std::is_pointer_v<TConstInputIterator>) {
+    // unfortunately, is_pointer is less sharp (doesn't bite on
+    // std::vector<>::iterator)
+#endif
+    fs.write(reinterpret_cast<std::ostream::char_type const*>(&*start),
+             nels * sizeof(value_type) / sizeof(std::ostream::char_type));
+    return;
+  }
+
+  // otherwise do it in chunks with a buffer
+
   size_t constexpr buffer_size = 0x10000;
 
   auto buffer = std::make_unique<value_type[]>(buffer_size);

@@ -10,7 +10,7 @@ find_package(Boost COMPONENTS filesystem REQUIRED)
 include_directories(${ZLIB_INCLUDE_DIRS})
 
 add_library(cnpy++ "cnpy++.cpp" "c_interface.c")
-target_compile_features(cnpy++ PUBLIC cxx_std_17)
+target_compile_features(cnpy++ PUBLIC cxx_std_20)
 target_include_directories(cnpy++ PUBLIC ${Boost_INCLUDE_DIR} ${ZLIB_INCLUDE_DIRS})
 target_include_directories(cnpy++ SYSTEM PUBLIC $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}>)
 target_link_libraries(cnpy++ ${ZLIB_LIBRARIES} Boost::filesystem)
