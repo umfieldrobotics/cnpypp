@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cstddef>
 #include <cstring>
 #include <fstream>
 #include <iostream>
@@ -37,7 +38,7 @@ enum class MemoryOrder {
 
 struct NpyArray {
   NpyArray(std::vector<size_t> const& _shape, size_t _word_size,
-           MemoryOrder _memory_order, std::unique_ptr<uint8_t[]>&& _buffer,
+           MemoryOrder _memory_order, std::unique_ptr<std::byte[]>&& _buffer,
            size_t _buffer_length)
       : shape{_shape}, word_size{_word_size}, memory_order{_memory_order},
         num_vals{std::accumulate(shape.begin(), shape.end(), size_t{1},
@@ -53,7 +54,7 @@ struct NpyArray {
   NpyArray(std::vector<size_t> const& _shape, size_t _word_size,
            MemoryOrder _memory_order)
       : NpyArray{_shape, _word_size, _memory_order,
-                 std::make_unique<uint8_t[]>(
+                 std::make_unique<std::byte[]>(
                      std::accumulate(_shape.begin(), _shape.end(), _word_size,
                                      std::multiplies<size_t>())),
                  std::accumulate(_shape.begin(), _shape.end(), _word_size,
@@ -96,7 +97,7 @@ struct NpyArray {
   size_t const offset;
 
 private:
-  std::unique_ptr<uint8_t[]> buffer;
+  std::unique_ptr<std::byte[]> buffer;
 };
 
 using npz_t = std::map<std::string, NpyArray>;
