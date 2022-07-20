@@ -31,6 +31,8 @@ enum cnpypp_data_type {
   cnpypp_float128 = 10
 };
 
+struct cnpypp_npyarray_handle;
+
 int cnpypp_npy_save(char const* fname, enum cnpypp_data_type, void const* start,
                     size_t const* shape, size_t rank, char const* mode,
                     enum cnpypp_memory_order);
@@ -46,6 +48,20 @@ int cnpypp_npz_save(char const* zipname, char const* fname,
 int cnpypp_npz_save_1d(char const* zipname, char const* fname,
                        enum cnpypp_data_type dtype, void const* data,
                        size_t num_elem, char const* mode);
+
+struct cnpypp_npyarray_handle* cnpypp_load_npyarray(char const* fname);
+
+void cnpypp_free_npyarray(struct cnpypp_npyarray_handle* npyarr);
+
+void const*
+cnpypp_npyarray_get_data(struct cnpypp_npyarray_handle const* npyarr);
+
+size_t const*
+cnpypp_npyarray_get_shape(struct cnpypp_npyarray_handle const* npyarr,
+                          size_t* rank);
+
+enum cnpypp_memory_order
+cnpypp_npyarray_get_memory_order(struct cnpypp_npyarray_handle const* npyarr);
 
 #ifdef __cplusplus
 }

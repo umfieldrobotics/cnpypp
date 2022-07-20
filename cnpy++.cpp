@@ -508,3 +508,36 @@ int cnpypp_npz_save(char const* zipname, char const* filename,
 
   return 0;
 }
+
+cnpypp_npyarray_handle* cnpypp_load_npyarray(char const* fname) {
+  auto* arr = new cnpypp::NpyArray(cnpypp::npy_load(fname));
+  return reinterpret_cast<cnpypp_npyarray_handle*>(arr);
+}
+
+void cnpypp_free_npyarray(cnpypp_npyarray_handle* npyarr) {
+  delete reinterpret_cast<cnpypp::NpyArray*>(npyarr);
+}
+
+void const* cnpypp_npyarray_get_data(cnpypp_npyarray_handle const* npyarr) {
+  auto const& array = *reinterpret_cast<cnpypp::NpyArray const*>(npyarr);
+  return array.data<void>();
+}
+
+size_t const* cnpypp_npyarray_get_shape(cnpypp_npyarray_handle const* npyarr,
+                                        size_t* rank) {
+  auto const& array = *reinterpret_cast<cnpypp::NpyArray const*>(npyarr);
+
+  if (rank != nullptr) {
+    *rank = array.shape.size();
+  }
+
+  return array.shape.data();
+}
+
+enum cnpypp_memory_order
+cnpypp_npyarray_get_memory_order(cnpypp_npyarray_handle const* npyarr) {
+  auto const& array = *reinterpret_cast<cnpypp::NpyArray const*>(npyarr);
+  return (array.memory_order == cnpypp::MemoryOrder::Fortran)
+             ? cnpypp_memory_order_fortran
+             : cnpypp_memory_order_c;
+}
