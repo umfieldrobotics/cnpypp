@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <complex>
 #include <cstring>
 #include <fstream>
 #include <iostream>
@@ -19,7 +20,7 @@
 #include <stdint.h>
 #include <string>
 #include <string_view>
-#include <typeinfo>
+#include <utility>
 #include <vector>
 
 #include <boost/filesystem.hpp>
@@ -101,7 +102,23 @@ private:
 
 using npz_t = std::map<std::string, NpyArray>;
 
-char map_type(const std::type_info& t);
+template <typename F> char constexpr map_type(std::complex<F>) { return 'c'; }
+
+template <typename T> char constexpr map_type(T) {
+  static_assert(std::is_arithmetic_v<T>, "only arithmetic types supported");
+
+  if constexpr (std::is_same_v<T, bool>) {
+    return 'b';
+  }
+
+  if constexpr (std::is_integral_v<T>) {
+    return std::is_signed_v<T> ? 'i' : 'u';
+  }
+
+  if constexpr (std::is_floating_point_v<T>) {
+    return 'f';
+  }
+}
 
 char BigEndianTest();
 
@@ -217,7 +234,7 @@ void write_data(TConstInputIterator start, size_t nels, std::ostream& fs) {
   if constexpr (std::contiguous_iterator<TConstInputIterator>) {
 #else
   if constexpr (std::is_pointer_v<TConstInputIterator>) {
-    // unfortunately, is_pointer is less sharp (doesn't bite on
+    // unfortunately, is_pointer is less sharp (e.g., doesn't bite on
     // std::vector<>::iterator)
 #endif
     fs.write(reinterpret_cast<std::ostream::char_type const*>(&*start),
@@ -379,7 +396,7 @@ std::vector<char> create_npy_header(const std::vector<size_t>& shape,
   std::vector<char> dict;
   append(dict, "{'descr': '");
   dict += BigEndianTest();
-  dict += map_type(typeid(T));
+  dict += map_type(T{});
   append(dict, std::to_string(sizeof(T)));
   append(dict, "', 'fortran_order': ");
   append(dict, (memory_order == MemoryOrder::C) ? "False" : "True");
