@@ -37,12 +37,13 @@ enum class MemoryOrder {
 };
 
 struct NpyArray {
-  NpyArray(std::vector<size_t> const& _shape, size_t _word_size,
+  NpyArray(std::vector<size_t> _shape, size_t _word_size,
            MemoryOrder _memory_order, std::unique_ptr<std::byte[]>&& _buffer,
            size_t _buffer_length)
-      : shape{_shape}, word_size{_word_size}, memory_order{_memory_order},
-        num_vals{std::accumulate(shape.begin(), shape.end(), size_t{1},
-                                 std::multiplies<size_t>())},
+      : shape{std::move(_shape)}, word_size{_word_size},
+        memory_order{_memory_order}, num_vals{std::accumulate(
+                                         shape.begin(), shape.end(), size_t{1},
+                                         std::multiplies<size_t>())},
         offset{_buffer_length - num_vals * _word_size}, buffer{std::move(
                                                             _buffer)} {}
 
