@@ -15,6 +15,8 @@
 #include <stdexcept>
 #include <stdint.h>
 
+#include <boost/endian/conversion.hpp>
+
 char cnpypp::BigEndianTest() {
   int32_t const x = 1;
   static_assert(sizeof(x) > 1);
@@ -36,7 +38,10 @@ void cnpypp::parse_npy_header(std::istream::char_type* buffer,
   // std::string magic_string(buffer,6);
   uint8_t const major_version = *reinterpret_cast<uint8_t*>(buffer + 6);
   uint8_t const minor_version = *reinterpret_cast<uint8_t*>(buffer + 7);
-  uint16_t const header_len = *reinterpret_cast<uint16_t*>(buffer + 8);
+  uint16_t const header_len =
+      boost::endian::endian_load<boost::uint16_t, 2,
+                                 boost::endian::order::little>(
+          (unsigned char*)buffer + 8);
   std::string header(reinterpret_cast<char*>(buffer + 9), header_len);
 
   if (!(major_version == 1 && minor_version == 0)) {
@@ -148,20 +153,33 @@ void cnpypp::parse_npy_header(std::istream& fs, size_t& word_size,
 }
 
 void cnpypp::parse_zip_footer(std::istream& fs, uint16_t& nrecs,
-                              size_t& global_header_size,
-                              size_t& global_header_offset) {
-  std::vector<char> footer(22);
+                              uint32_t& global_header_size,
+                              uint32_t& global_header_offset) {
+  std::vector<uint8_t> footer(22);
   fs.seekg(-22, std::ios_base::end);
-  fs.read(&footer[0], sizeof(char) * 22);
+  fs.read(reinterpret_cast<char*>(&footer[0]), sizeof(char) * 22);
 
   [[maybe_unused]] uint16_t disk_no, disk_start, nrecs_on_disk, comment_len;
-  disk_no = *(uint16_t*)&footer[4];
-  disk_start = *(uint16_t*)&footer[6];
-  nrecs_on_disk = *(uint16_t*)&footer[8];
-  nrecs = *(uint16_t*)&footer[10];
-  global_header_size = *(uint32_t*)&footer[12];
-  global_header_offset = *(uint32_t*)&footer[16];
-  comment_len = *(uint16_t*)&footer[20];
+  disk_no =
+      boost::endian::endian_load<boost::uint16_t, 2,
+                                 boost::endian::order::little>(&footer[4]);
+  disk_start =
+      boost::endian::endian_load<boost::uint16_t, 2,
+                                 boost::endian::order::little>(&footer[6]);
+  nrecs_on_disk =
+      boost::endian::endian_load<boost::uint16_t, 2,
+                                 boost::endian::order::little>(&footer[8]);
+  nrecs = boost::endian::endian_load<boost::uint16_t, 2,
+                                     boost::endian::order::little>(&footer[10]);
+  global_header_size =
+      boost::endian::endian_load<boost::uint32_t, 4,
+                                 boost::endian::order::little>(&footer[12]);
+  global_header_offset =
+      boost::endian::endian_load<boost::uint32_t, 4,
+                                 boost::endian::order::little>(&footer[16]);
+  comment_len =
+      boost::endian::endian_load<boost::uint16_t, 2,
+                                 boost::endian::order::little>(&footer[20]);
 
   if (disk_no != 0 || disk_start != 0 || nrecs_on_disk != nrecs ||
       comment_len != 0) {
@@ -230,15 +248,16 @@ cnpypp::npz_t cnpypp::npz_load(std::string const& fname) {
   cnpypp::npz_t arrays;
 
   while (1) {
-    std::vector<std::ifstream::char_type> local_header(30);
-    fs.read(&local_header[0], 30);
+    std::vector<unsigned char> local_header(30);
+    fs.read(reinterpret_cast<char*>(&local_header[0]), 30);
 
     // if we've reached the global header, stop reading
     if (local_header[2] != 0x03 || local_header[3] != 0x04)
       break;
 
     // read in the variable name
-    uint16_t name_len = *(uint16_t*)&local_header[26];
+    uint16_t name_len = boost::endian::endian_load<
+        boost::uint16_t, 2, boost::endian::order::little>(&local_header[26]);
     std::string varname(name_len, ' ');
     fs.read(&varname[0], sizeof(char) * name_len);
 
@@ -246,16 +265,23 @@ cnpypp::npz_t cnpypp::npz_load(std::string const& fname) {
     varname.erase(varname.end() - 4, varname.end());
 
     // read in the extra field
-    uint16_t extra_field_len = *(uint16_t*)&local_header[28];
+    uint16_t extra_field_len = boost::endian::endian_load<
+        boost::uint16_t, 2, boost::endian::order::little>(&local_header[28]);
     if (extra_field_len > 0) {
       std::vector<char> buff(extra_field_len);
       fs.read(&buff[0], extra_field_len);
     }
 
-    uint16_t compr_method = *reinterpret_cast<uint16_t*>(&local_header[0] + 8);
-    uint32_t compr_bytes = *reinterpret_cast<uint32_t*>(&local_header[0] + 18);
-    uint32_t uncompr_bytes =
-        *reinterpret_cast<uint32_t*>(&local_header[0] + 22);
+    uint16_t const compr_method = boost::endian::endian_load<
+        boost::uint16_t, 2, boost::endian::order::little>(&local_header[0] + 8);
+    uint32_t const compr_bytes =
+        boost::endian::endian_load<boost::uint32_t, 4,
+                                   boost::endian::order::little>(
+            &local_header[0] + 18);
+    uint32_t const uncompr_bytes =
+        boost::endian::endian_load<boost::uint32_t, 4,
+                                   boost::endian::order::little>(
+            &local_header[0] + 22);
 
     if (compr_method == 0) {
       arrays.emplace(varname, load_the_npy_file(fs));
@@ -276,27 +302,35 @@ cnpypp::NpyArray cnpypp::npz_load(std::string const& fname,
     throw std::runtime_error("npz_load: Unable to open file " + fname);
 
   while (1) {
-    std::vector<char> local_header(30);
-    fs.read(&local_header[0], sizeof(char) * 30);
+    std::vector<unsigned char> local_header(30);
+    fs.read(reinterpret_cast<char*>(&local_header[0]), sizeof(char) * 30);
 
     // if we've reached the global header, stop reading
     if (local_header[2] != 0x03 || local_header[3] != 0x04)
       break;
 
     // read in the variable name
-    uint16_t name_len = *(uint16_t*)&local_header[26];
+    uint16_t const name_len = boost::endian::endian_load<
+        boost::uint16_t, 2, boost::endian::order::little>(&local_header[26]);
     std::string vname(name_len, ' ');
     fs.read(&vname[0], sizeof(char) * name_len);
     vname.erase(vname.end() - 4, vname.end()); // erase the lagging .npy
 
     // read in the extra field
-    uint16_t extra_field_len = *(uint16_t*)&local_header[28];
+    uint16_t const extra_field_len = boost::endian::endian_load<
+        boost::uint16_t, 2, boost::endian::order::little>(&local_header[28]);
     fs.seekg(extra_field_len, std::ios_base::cur); // skip past the extra field
 
-    uint16_t compr_method = *reinterpret_cast<uint16_t*>(&local_header[0] + 8);
-    uint32_t compr_bytes = *reinterpret_cast<uint32_t*>(&local_header[0] + 18);
-    uint32_t uncompr_bytes =
-        *reinterpret_cast<uint32_t*>(&local_header[0] + 22);
+    uint16_t const compr_method = boost::endian::endian_load<
+        boost::uint16_t, 2, boost::endian::order::little>(&local_header[0] + 8);
+    uint32_t const compr_bytes =
+        boost::endian::endian_load<boost::uint32_t, 4,
+                                   boost::endian::order::little>(
+            &local_header[0] + 18);
+    uint32_t const uncompr_bytes =
+        boost::endian::endian_load<boost::uint32_t, 4,
+                                   boost::endian::order::little>(
+            &local_header[0] + 22);
 
     if (vname == varname) {
       return (compr_method == 0)
@@ -304,7 +338,8 @@ cnpypp::NpyArray cnpypp::npz_load(std::string const& fname,
                  : load_the_npz_array(fs, compr_bytes, uncompr_bytes);
     } else {
       // skip past the data
-      uint32_t size = *(uint32_t*)&local_header[22];
+      uint32_t const size = boost::endian::endian_load<
+          boost::uint32_t, 4, boost::endian::order::little>(&local_header[22]);
       fs.seekg(size, std::ios_base::cur);
     }
   }

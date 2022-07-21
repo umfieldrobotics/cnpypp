@@ -134,7 +134,8 @@ void parse_npy_header(std::istream::char_type* buffer, size_t& word_size,
                       std::vector<size_t>& shape, MemoryOrder& memory_order);
 
 void parse_zip_footer(std::istream& fp, uint16_t& nrecs,
-                      size_t& global_header_size, size_t& global_header_offset);
+                      uint32_t& global_header_size,
+                      uint32_t& global_header_offset);
 
 npz_t npz_load(std::string const& fname);
 
@@ -279,7 +280,7 @@ void npz_save(std::string const& zipname, std::string fname,
   // now, on with the show
   std::fstream fs;
   uint16_t nrecs = 0;
-  size_t global_header_offset = 0;
+  uint32_t global_header_offset = 0;
   std::vector<char> global_header;
 
   if (mode == "a" && boost::filesystem::exists(zipname)) {
@@ -290,7 +291,7 @@ void npz_save(std::string const& zipname, std::string fname,
     // header then read and store the global header. below, we will write the
     // the new data at the start of the global header then append the global
     // header and footer below it
-    size_t global_header_size;
+    uint32_t global_header_size;
     parse_zip_footer(fs, nrecs, global_header_size, global_header_offset);
     fs.seekp(global_header_offset, std::ios_base::beg);
     global_header.resize(global_header_size);
