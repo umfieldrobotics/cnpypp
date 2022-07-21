@@ -40,7 +40,7 @@ void cnpypp::parse_npy_header(std::istream::char_type* buffer,
   std::string header(reinterpret_cast<char*>(buffer + 9), header_len);
 
   if (!(major_version == 1 && minor_version == 0)) {
-    throw std::runtime_exception("parse_npy_header: version not supported");
+    throw std::runtime_error("parse_npy_header: version not supported");
   }
 
   size_t loc1, loc2;
