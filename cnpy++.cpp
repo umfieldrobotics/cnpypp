@@ -16,6 +16,7 @@
 #include <stdint.h>
 
 #include <boost/endian/conversion.hpp>
+#include <boost/filesystem.hpp>
 
 char cnpypp::BigEndianTest() {
   int32_t const x = 1;
@@ -28,6 +29,10 @@ std::vector<char>& cnpypp::append(std::vector<char>& vec,
                                   std::string_view view) {
   vec.insert(vec.end(), view.begin(), view.end());
   return vec;
+}
+
+bool cnpypp::_exists(std::string const& fname) {
+  return boost::filesystem::exists(fname);
 }
 
 static std::regex const num_regex("[0-9][0-9]*");

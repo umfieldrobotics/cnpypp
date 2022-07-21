@@ -23,7 +23,6 @@
 #include <utility>
 #include <vector>
 
-#include <boost/filesystem.hpp>
 #include <zlib.h>
 
 #include <cnpy++.h>
@@ -122,6 +121,7 @@ template <typename T> char constexpr map_type(T) {
 }
 
 char BigEndianTest();
+bool _exists(std::string const&); // calls boost::filesystem::exists()
 
 template <typename T>
 std::vector<char> create_npy_header(const std::vector<size_t>& shape,
@@ -169,7 +169,7 @@ void npy_save(std::string const& fname, TConstInputIterator start,
   using value_type =
       typename std::iterator_traits<TConstInputIterator>::value_type;
 
-  if (mode == "a" && boost::filesystem::exists(fname)) {
+  if (mode == "a" && _exists(fname)) {
     // file exists. we need to append to it. read the header, modify the array
     // size
     fs.open(fname,
@@ -283,7 +283,7 @@ void npz_save(std::string const& zipname, std::string fname,
   uint32_t global_header_offset = 0;
   std::vector<char> global_header;
 
-  if (mode == "a" && boost::filesystem::exists(zipname)) {
+  if (mode == "a" && _exists(zipname)) {
     fs.open(zipname,
             std::ios_base::in | std::ios_base::out | std::ios_base::binary);
     // zip file exists. we need to add a new npy file to it.
@@ -313,14 +313,14 @@ void npz_save(std::string const& zipname, std::string fname,
   size_t nbytes = nels * sizeof(value_type) + npy_header.size();
 
   // get the CRC of the data to be added
-  uint32_t crc = crc32(0L, (uint8_t*)&npy_header[0], npy_header.size());
+  uint32_t crc = _crc32(0L, (uint8_t*)&npy_header[0], npy_header.size());
 
   auto it = start;
   for (size_t i = 0; i < nels; ++i) {
     auto data = *it;
     ++it;
     static_assert(std::is_same_v<decltype(data), value_type>);
-    crc = crc32(crc, (uint8_t*)(&data), sizeof(value_type));
+    crc = _crc32(crc, (uint8_t*)(&data), sizeof(value_type));
   }
 
   // build the local header
