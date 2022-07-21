@@ -258,10 +258,10 @@ cnpypp::npz_t cnpypp::npz_load(std::string const& fname) {
         *reinterpret_cast<uint32_t*>(&local_header[0] + 22);
 
     if (compr_method == 0) {
-      arrays.emplace(varname, std::move(load_the_npy_file(fs)));
+      arrays.emplace(varname, load_the_npy_file(fs));
     } else {
-      arrays.emplace(varname, std::move(load_the_npz_array(fs, compr_bytes,
-                                                           uncompr_bytes)));
+      arrays.emplace(varname,
+                     load_the_npz_array(fs, compr_bytes, uncompr_bytes));
     }
   }
 
@@ -299,10 +299,9 @@ cnpypp::NpyArray cnpypp::npz_load(std::string const& fname,
         *reinterpret_cast<uint32_t*>(&local_header[0] + 22);
 
     if (vname == varname) {
-      NpyArray array = (compr_method == 0)
-                           ? load_the_npy_file(fs)
-                           : load_the_npz_array(fs, compr_bytes, uncompr_bytes);
-      return array;
+      return (compr_method == 0)
+                 ? load_the_npy_file(fs)
+                 : load_the_npz_array(fs, compr_bytes, uncompr_bytes);
     } else {
       // skip past the data
       uint32_t size = *(uint32_t*)&local_header[22];
@@ -316,15 +315,185 @@ cnpypp::NpyArray cnpypp::npz_load(std::string const& fname,
 }
 
 cnpypp::NpyArray cnpypp::npy_load(std::string const& fname) {
-
   std::ifstream fs{fname, std::ios::binary};
 
   if (!fs)
     throw std::runtime_error("npy_load: Unable to open file " + fname);
 
-  NpyArray arr = load_the_npy_file(fs);
+  return load_the_npy_file(fs);
+}
 
-  return arr;
+// for C compatibility
+int cnpypp_npy_save(char const* fname, cnpypp_data_type dtype,
+                    void const* start, size_t const* shape, size_t rank,
+                    char const* mode, enum cnpypp_memory_order memory_order) {
+  std::string const filename = fname;
+  std::vector<size_t> shapeVec{};
+  shapeVec.reserve(rank);
+  std::copy_n(shape, rank, std::back_inserter(shapeVec));
+
+  switch (dtype) {
+  case cnpypp_int8:
+    cnpypp::npy_save(filename, reinterpret_cast<int8_t const*>(start), shapeVec,
+                     mode, static_cast<cnpypp::MemoryOrder>(memory_order));
+    break;
+  case cnpypp_uint8:
+    cnpypp::npy_save(filename, reinterpret_cast<uint8_t const*>(start),
+                     shapeVec, mode,
+                     static_cast<cnpypp::MemoryOrder>(memory_order));
+    break;
+  case cnpypp_int16:
+    cnpypp::npy_save(filename, reinterpret_cast<int16_t const*>(start),
+                     shapeVec, mode,
+                     static_cast<cnpypp::MemoryOrder>(memory_order));
+    break;
+  case cnpypp_uint16:
+    cnpypp::npy_save(filename, reinterpret_cast<uint16_t const*>(start),
+                     shapeVec, mode,
+                     static_cast<cnpypp::MemoryOrder>(memory_order));
+    break;
+  case cnpypp_int32:
+    cnpypp::npy_save(filename, reinterpret_cast<int32_t const*>(start),
+                     shapeVec, mode,
+                     static_cast<cnpypp::MemoryOrder>(memory_order));
+    break;
+  case cnpypp_uint32:
+    cnpypp::npy_save(filename, reinterpret_cast<uint32_t const*>(start),
+                     shapeVec, mode,
+                     static_cast<cnpypp::MemoryOrder>(memory_order));
+    break;
+  case cnpypp_int64:
+    cnpypp::npy_save(filename, reinterpret_cast<int64_t const*>(start),
+                     shapeVec, mode,
+                     static_cast<cnpypp::MemoryOrder>(memory_order));
+    break;
+  case cnpypp_uint64:
+    cnpypp::npy_save(filename, reinterpret_cast<uint64_t const*>(start),
+                     shapeVec, mode,
+                     static_cast<cnpypp::MemoryOrder>(memory_order));
+    break;
+  case cnpypp_float32:
+    cnpypp::npy_save(filename, reinterpret_cast<float const*>(start), shapeVec,
+                     mode, static_cast<cnpypp::MemoryOrder>(memory_order));
+    break;
+  case cnpypp_float64:
+    cnpypp::npy_save(filename, reinterpret_cast<double const*>(start), shapeVec,
+                     mode, static_cast<cnpypp::MemoryOrder>(memory_order));
+    break;
+  case cnpypp_float128:
+    cnpypp::npy_save(filename, reinterpret_cast<long double const*>(start),
+                     shapeVec, mode,
+                     static_cast<cnpypp::MemoryOrder>(memory_order));
+    break;
+  default:
+    std::cerr << "npy_save: unknown type argument" << std::endl;
+  }
+
+  return 0;
+}
+
+int cnpypp_npz_save(char const* zipname, char const* filename,
+                    enum cnpypp_data_type dtype, void const* data,
+                    size_t const* shape, size_t rank, char const* mode,
+                    enum cnpypp_memory_order memory_order) {
+  std::vector<size_t> shapeVec{};
+  shapeVec.reserve(rank);
+  std::copy_n(shape, rank, std::back_inserter(shapeVec));
+
+  switch (dtype) {
+  case cnpypp_int8:
+    cnpypp::npz_save(zipname, filename, reinterpret_cast<int8_t const*>(data),
+                     shapeVec, mode,
+                     static_cast<cnpypp::MemoryOrder>(memory_order));
+    break;
+  case cnpypp_uint8:
+    cnpypp::npz_save(zipname, filename, reinterpret_cast<uint8_t const*>(data),
+                     shapeVec, mode,
+                     static_cast<cnpypp::MemoryOrder>(memory_order));
+    break;
+  case cnpypp_int16:
+    cnpypp::npz_save(zipname, filename, reinterpret_cast<int16_t const*>(data),
+                     shapeVec, mode,
+                     static_cast<cnpypp::MemoryOrder>(memory_order));
+    break;
+  case cnpypp_uint16:
+    cnpypp::npz_save(zipname, filename, reinterpret_cast<uint16_t const*>(data),
+                     shapeVec, mode,
+                     static_cast<cnpypp::MemoryOrder>(memory_order));
+    break;
+  case cnpypp_int32:
+    cnpypp::npz_save(zipname, filename, reinterpret_cast<int32_t const*>(data),
+                     shapeVec, mode,
+                     static_cast<cnpypp::MemoryOrder>(memory_order));
+    break;
+  case cnpypp_uint32:
+    cnpypp::npz_save(zipname, filename, reinterpret_cast<uint32_t const*>(data),
+                     shapeVec, mode,
+                     static_cast<cnpypp::MemoryOrder>(memory_order));
+    break;
+  case cnpypp_int64:
+    cnpypp::npz_save(zipname, filename, reinterpret_cast<int64_t const*>(data),
+                     shapeVec, mode,
+                     static_cast<cnpypp::MemoryOrder>(memory_order));
+    break;
+  case cnpypp_uint64:
+    cnpypp::npz_save(zipname, filename, reinterpret_cast<uint64_t const*>(data),
+                     shapeVec, mode,
+                     static_cast<cnpypp::MemoryOrder>(memory_order));
+    break;
+  case cnpypp_float32:
+    cnpypp::npz_save(zipname, filename, reinterpret_cast<float const*>(data),
+                     shapeVec, mode,
+                     static_cast<cnpypp::MemoryOrder>(memory_order));
+    break;
+  case cnpypp_float64:
+    cnpypp::npz_save(zipname, filename, reinterpret_cast<double const*>(data),
+                     shapeVec, mode,
+                     static_cast<cnpypp::MemoryOrder>(memory_order));
+    break;
+  case cnpypp_float128:
+    cnpypp::npz_save(zipname, filename,
+                     reinterpret_cast<long double const*>(data), shapeVec, mode,
+                     static_cast<cnpypp::MemoryOrder>(memory_order));
+    break;
+  default:
+    std::cerr << "npz_save: unknown type argument" << std::endl;
+  }
+
+  return 0;
+}
+
+cnpypp_npyarray_handle* cnpypp_load_npyarray(char const* fname) {
+  auto* arr = new cnpypp::NpyArray(cnpypp::npy_load(fname));
+  return reinterpret_cast<cnpypp_npyarray_handle*>(arr);
+}
+
+void cnpypp_free_npyarray(cnpypp_npyarray_handle* npyarr) {
+  delete reinterpret_cast<cnpypp::NpyArray*>(npyarr);
+}
+
+void const* cnpypp_npyarray_get_data(cnpypp_npyarray_handle const* npyarr) {
+  auto const& array = *reinterpret_cast<cnpypp::NpyArray const*>(npyarr);
+  return array.data<void>();
+}
+
+size_t const* cnpypp_npyarray_get_shape(cnpypp_npyarray_handle const* npyarr,
+                                        size_t* rank) {
+  auto const& array = *reinterpret_cast<cnpypp::NpyArray const*>(npyarr);
+
+  if (rank != nullptr) {
+    *rank = array.shape.size();
+  }
+
+  return array.shape.data();
+}
+
+enum cnpypp_memory_order
+cnpypp_npyarray_get_memory_order(cnpypp_npyarray_handle const* npyarr) {
+  auto const& array = *reinterpret_cast<cnpypp::NpyArray const*>(npyarr);
+  return (array.memory_order == cnpypp::MemoryOrder::Fortran)
+             ? cnpypp_memory_order_fortran
+             : cnpypp_memory_order_c;
 }
 
 // for C compatibility
