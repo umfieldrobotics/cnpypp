@@ -74,10 +74,14 @@ std::vector<char>& cnpypp::append(std::vector<char>& vec, std::string_view view)
 void cnpypp::parse_npy_header(std::istream::char_type* buffer, size_t& word_size,
                             std::vector<size_t>& shape, cnpypp::MemoryOrder& memory_order) {
   // std::string magic_string(buffer,6);
-  uint8_t major_version = *reinterpret_cast<uint8_t*>(buffer + 6);
-  uint8_t minor_version = *reinterpret_cast<uint8_t*>(buffer + 7);
-  uint16_t header_len = *reinterpret_cast<uint16_t*>(buffer + 8);
+  uint8_t const major_version = *reinterpret_cast<uint8_t*>(buffer + 6);
+  uint8_t const minor_version = *reinterpret_cast<uint8_t*>(buffer + 7);
+  uint16_t const header_len = *reinterpret_cast<uint16_t*>(buffer + 8);
   std::string header(reinterpret_cast<char*>(buffer + 9), header_len);
+
+  if (!(major_version == 1 && minor_version == 0)) {
+    throw std::runtime_exception("parse_npy_header: version not supported");
+  }
 
   size_t loc1, loc2;
 
