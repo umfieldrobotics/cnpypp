@@ -232,7 +232,7 @@ void write_data(TConstInputIterator start, size_t nels, std::ostream& fs) {
       typename std::iterator_traits<TConstInputIterator>::value_type;
 
   // if it comes from contiguous memory, dump directly in file
-#if __cplusplus >= 202002L
+#if __cpp_concepts >= 202002L
   if constexpr (std::contiguous_iterator<TConstInputIterator>) {
 #else
   if constexpr (std::is_pointer_v<TConstInputIterator>) {
