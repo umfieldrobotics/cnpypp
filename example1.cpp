@@ -1,6 +1,7 @@
 #include "cnpy++.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstdlib>
 #include <functional>
 #include <iostream>
