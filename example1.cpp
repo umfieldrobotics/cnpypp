@@ -1,18 +1,21 @@
-#include "cnpy++.hpp"
-
 #include <algorithm>
 #include <array>
 #include <cstdlib>
 #include <functional>
 #include <iostream>
+#include <list>
 #include <map>
 #include <numeric>
 #include <string>
 #include <string_view>
 
+#include "cnpy++.hpp"
+
 static const int Nx = 2;
 static const int Ny = 4;
 static const int Nz = 8;
+
+static const int Nelem = Nx * Ny * Nz;
 
 static std::vector<size_t> const shape{Nz, Ny, Nx};
 
@@ -143,27 +146,67 @@ int main() {
     }
   }
 
+  std::list<uint32_t> const list_u{data.cbegin(), data.cend()}; // copy to list
+  std::list<float_t> const list_f{data.cbegin(), data.cend()};
+
+  // append list to npz
+  {
+    cnpypp::npz_save("out.npz", "arr1", list_u.cbegin(), shape, "a");
+    cnpypp::npz_save("out.npz", "arr2", list_f.cbegin(), shape, "a");
+  }
+
   // load the entire npz file
   {
     cnpypp::npz_t my_npz = cnpypp::npz_load("out.npz");
 
-    cnpypp::NpyArray const& arr = my_npz.find("str")->second;
-    char const* const loaded_str = arr.data<char>();
+    {
+      cnpypp::NpyArray const& arr = my_npz.find("str")->second;
+      char const* const loaded_str = arr.data<char>();
 
-    // make sure the loaded data matches the saved data
-    if (!(arr.word_size == sizeof(decltype(str1)::value_type))) {
-      std::cerr << "error in line " << __LINE__ << std::endl;
-      return EXIT_FAILURE;
+      // make sure the loaded data matches the saved data
+      if (!(arr.word_size == sizeof(decltype(str1)::value_type))) {
+        std::cerr << "error in line " << __LINE__ << std::endl;
+        return EXIT_FAILURE;
+      }
+
+      if (arr.shape.size() != 1 || arr.shape.at(0) != str1.size()) {
+        std::cerr << "error in line " << __LINE__ << std::endl;
+        return EXIT_FAILURE;
+      }
+
+      if (!std::equal(str1.cbegin(), str1.cend(), loaded_str)) {
+        std::cerr << "error in line " << __LINE__ << std::endl;
+        return EXIT_FAILURE;
+      }
     }
+    {
+      cnpypp::NpyArray const& arr = my_npz.find("arr1")->second;
+      cnpypp::NpyArray const& arr2 = my_npz.find("arr2")->second;
+      uint32_t const* const loaded_arr_u = arr.data<uint32_t>();
+      float const* const loaded_arr_f = arr2.data<float>();
 
-    if (arr.shape.size() != 1 || arr.shape.at(0) != str1.size()) {
-      std::cerr << "error in line " << __LINE__ << std::endl;
-      return EXIT_FAILURE;
-    }
+      // make sure the loaded data matches the saved data
+      if (arr.word_size != sizeof(uint32_t) ||
+          arr2.word_size != sizeof(float)) {
+        std::cerr << "error in line " << __LINE__ << std::endl;
+        return EXIT_FAILURE;
+      }
 
-    if (!std::equal(str1.cbegin(), str1.cend(), loaded_str)) {
-      std::cerr << "error in line " << __LINE__ << std::endl;
-      return EXIT_FAILURE;
+      if (!std::equal(arr.shape.cbegin(), arr.shape.cend(), shape.cbegin()) ||
+          !std::equal(arr2.shape.cbegin(), arr2.shape.cend(), shape.cbegin())) {
+        std::cerr << "error in line " << __LINE__ << std::endl;
+        return EXIT_FAILURE;
+      }
+
+      if (!std::equal(data.cbegin(), data.cend(), loaded_arr_u)) {
+        std::cerr << "error in line " << __LINE__ << std::endl;
+        return EXIT_FAILURE;
+      }
+
+      if (!std::equal(data.cbegin(), data.cend(), loaded_arr_f)) {
+        std::cerr << "error in line " << __LINE__ << std::endl;
+        return EXIT_FAILURE;
+      }
     }
   }
 
