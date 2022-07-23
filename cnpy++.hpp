@@ -107,9 +107,10 @@ template <typename F> char constexpr map_type(std::complex<F>) { return 'c'; }
 template <typename T> char constexpr map_type(T) {
   static_assert(std::is_arithmetic_v<T>, "only arithmetic types supported");
 
-  if constexpr (std::is_same_v<T, bool>) {
+  // bool not supported at the moment (-> std::vector<bool> etc.)
+  /*if constexpr (std::is_same_v<T, bool>) {
     return 'b';
-  }
+  }*/
 
   if constexpr (std::is_integral_v<T>) {
     return std::is_signed_v<T> ? 'i' : 'u';
