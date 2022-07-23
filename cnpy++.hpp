@@ -124,8 +124,8 @@ template <typename T> char constexpr map_type(T) {
 char BigEndianTest();
 bool _exists(std::string const&); // calls boost::filesystem::exists()
 
-template <typename T>
 std::vector<char> create_npy_header(const std::vector<size_t>& shape,
+                                    char dtype, int size,
                                     MemoryOrder = MemoryOrder::C);
 
 void parse_npy_header(std::istream&, size_t& word_size,
@@ -262,7 +262,8 @@ void npy_save(std::string const& fname, TConstInputIterator start,
   }
 
   std::vector<char> const header =
-      create_npy_header<value_type>(true_data_shape, memory_order);
+      create_npy_header(true_data_shape, map_type(value_type{}),
+                        sizeof(value_type), memory_order);
   size_t const nels =
       std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<size_t>());
 
@@ -313,8 +314,8 @@ void npz_save(std::string const& zipname, std::string fname,
     fs.open(zipname, std::ios_base::out | std::ios_base::binary);
   }
 
-  std::vector<char> npy_header =
-      create_npy_header<value_type>(shape, memory_order);
+  std::vector<char> npy_header = create_npy_header(
+      shape, map_type(value_type{}), sizeof(value_type), memory_order);
 
   size_t nels =
       std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<size_t>());
@@ -400,14 +401,14 @@ void npz_save(std::string const& zipname, std::string_view fname,
   npz_save(zipname, fname, &data[0], {data.size()}, mode);
 }
 
-template <typename T>
 std::vector<char> create_npy_header(const std::vector<size_t>& shape,
+                                    char dtype, int size,
                                     MemoryOrder memory_order) {
   std::vector<char> dict;
   append(dict, "{'descr': '");
   dict += BigEndianTest();
-  dict += map_type(T{});
-  append(dict, std::to_string(sizeof(T)));
+  dict.push_back(dtype);
+  append(dict, std::to_string(size));
   append(dict, "', 'fortran_order': ");
   append(dict, (memory_order == MemoryOrder::C) ? "False" : "True");
   append(dict, ", 'shape': (");
