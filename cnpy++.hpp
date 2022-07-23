@@ -145,7 +145,54 @@ NpyArray npz_load(std::string const& fname, std::string const& varname);
 NpyArray npy_load(std::string const& fname);
 
 template <typename TConstInputIterator>
-void write_data(TConstInputIterator, size_t, std::ostream&);
+bool constexpr is_contiguous_v =
+#if __cpp_lib_concepts >= 202002L
+    std::contiguous_iterator<TConstInputIterator>;
+#else
+#warning "no concept support available - fallback to std::is_pointer_v"
+    std::is_pointer_v<TConstInputIterator>; // unfortunately, is_pointer is less
+                                            // sharp (e.g., doesn't bite on
+                                            // std::vector<>::iterator)
+#endif
+
+// if it comes from contiguous memory, dump directly in file
+template <typename TConstInputIterator,
+          std::enable_if_t<is_contiguous_v<TConstInputIterator>, int> = 0>
+void write_data(TConstInputIterator start, size_t nels, std::ostream& fs) {
+  using value_type =
+      typename std::iterator_traits<TConstInputIterator>::value_type;
+
+  auto constexpr size_elem = sizeof(value_type);
+
+  fs.write(reinterpret_cast<std::ostream::char_type const*>(&*start),
+           nels * size_elem / sizeof(std::ostream::char_type));
+}
+
+// otherwise do it in chunks with a buffer
+template <typename TConstInputIterator,
+          std::enable_if_t<!is_contiguous_v<TConstInputIterator>, int> = 0>
+void write_data(TConstInputIterator start, size_t nels, std::ostream& fs) {
+  using value_type =
+      typename std::iterator_traits<TConstInputIterator>::value_type;
+
+  size_t constexpr buffer_size = 0x10000;
+
+  auto buffer = std::make_unique<value_type[]>(buffer_size);
+
+  size_t elements_written = 0;
+  auto it = start;
+
+  while (elements_written < nels) {
+    size_t count = 0;
+    while (count < buffer_size && elements_written < nels) {
+      buffer[count] = *it;
+      ++it;
+      ++count;
+      ++elements_written;
+    }
+    write_data(buffer.get(), count, fs);
+  }
+}
 
 template <typename T>
 std::vector<char>& operator+=(std::vector<char>& lhs, const T rhs) {
@@ -225,46 +272,6 @@ void npy_save(std::string const& fname, TConstInputIterator start,
 
   // now write actual data
   write_data(start, nels, fs);
-}
-
-template <typename TConstInputIterator>
-void write_data(TConstInputIterator start, size_t nels, std::ostream& fs) {
-  using value_type =
-      typename std::iterator_traits<TConstInputIterator>::value_type;
-
-  // if it comes from contiguous memory, dump directly in file
-#if __cpp_concepts >= 202002L
-  if constexpr (std::contiguous_iterator<TConstInputIterator>) {
-#else
-  if constexpr (std::is_pointer_v<TConstInputIterator>) {
-    // unfortunately, is_pointer is less sharp (e.g., doesn't bite on
-    // std::vector<>::iterator)
-#endif
-    fs.write(reinterpret_cast<std::ostream::char_type const*>(&*start),
-             nels * sizeof(value_type) / sizeof(std::ostream::char_type));
-    return;
-  }
-
-  // otherwise do it in chunks with a buffer
-
-  size_t constexpr buffer_size = 0x10000;
-
-  auto buffer = std::make_unique<value_type[]>(buffer_size);
-
-  size_t elements_written = 0;
-  auto it = start;
-
-  while (elements_written < nels) {
-    size_t count = 0;
-    while (count < buffer_size && elements_written < nels) {
-      buffer[count] = *it;
-      ++it;
-      ++count;
-      ++elements_written;
-    }
-    fs.write(reinterpret_cast<std::ostream::char_type*>(buffer.get()),
-             sizeof(value_type) / sizeof(std::ostream::char_type) * count);
-  }
 }
 
 template <typename TConstInputIterator>
