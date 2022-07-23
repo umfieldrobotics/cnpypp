@@ -401,40 +401,4 @@ void npz_save(std::string const& zipname, std::string_view fname,
   npz_save(zipname, fname, &data[0], {data.size()}, mode);
 }
 
-std::vector<char> create_npy_header(const std::vector<size_t>& shape,
-                                    char dtype, int size,
-                                    MemoryOrder memory_order) {
-  std::vector<char> dict;
-  append(dict, "{'descr': '");
-  dict += BigEndianTest();
-  dict.push_back(dtype);
-  append(dict, std::to_string(size));
-  append(dict, "', 'fortran_order': ");
-  append(dict, (memory_order == MemoryOrder::C) ? "False" : "True");
-  append(dict, ", 'shape': (");
-  append(dict, std::to_string(shape[0]));
-  for (size_t i = 1; i < shape.size(); i++) {
-    append(dict, ", ");
-    append(dict, std::to_string(shape[i]));
-  }
-  if (shape.size() == 1)
-    append(dict, ",");
-  append(dict, "), }");
-  // pad with spaces so that preamble+dict is modulo 16 bytes. preamble is 10
-  // bytes. dict needs to end with \n
-  int remainder = 16 - (10 + dict.size()) % 16;
-  dict.insert(dict.end(), remainder, ' ');
-  dict.back() = '\n';
-
-  std::vector<char> header;
-  header += (char)0x93;
-  append(header, "NUMPY");
-  header += (char)0x01; // major version of numpy format
-  header += (char)0x00; // minor version of numpy format
-  header += (uint16_t)dict.size();
-  header.insert(header.end(), dict.begin(), dict.end());
-
-  return header;
-}
-
 } // namespace cnpypp
