@@ -3,7 +3,7 @@
 // license available in LICENSE file, or at
 // http://www.opensource.org/licenses/mit-license.php
 
-#include <cnpy++.h>
+#include "cnpy++.h"
 #include <zlib.h>
 
 uint32_t _crc32(unsigned long int crc, uint8_t const* data, unsigned int len) {
