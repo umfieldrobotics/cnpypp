@@ -3,7 +3,6 @@
 // license available in LICENSE file, or at
 // http://www.opensource.org/licenses/mit-license.php
 
-#include "cnpy++.hpp"
 #include <algorithm>
 #include <complex>
 #include <cstdlib>
@@ -17,6 +16,8 @@
 
 #include <boost/endian/conversion.hpp>
 #include <boost/filesystem.hpp>
+
+#include "cnpy++.hpp"
 
 char cnpypp::BigEndianTest() {
   int32_t const x = 1;
