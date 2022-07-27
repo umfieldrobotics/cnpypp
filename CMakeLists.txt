@@ -26,6 +26,10 @@ install(FILES "cnpy++.hpp" "cnpy++.h" DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 add_executable(example1 example1.cpp)
 target_link_libraries(example1 cnpy++)
 
+
+add_executable(example2 example2.cpp)
+target_link_libraries(example2 cnpy++)
+
 add_executable(example_c example_c.c)
 target_link_libraries(example_c cnpy++)
 

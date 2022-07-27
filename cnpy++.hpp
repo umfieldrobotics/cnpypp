@@ -30,6 +30,29 @@
 #include <cnpy++.h>
 
 namespace cnpypp {
+namespace detail {
+#if __cpp_lib_concepts >= 202002L
+template <class T, std::size_t N>
+concept has_tuple_element = requires(T t) {
+  typename std::tuple_element_t<N, std::remove_const_t<T>>;
+  { get<N>(t) } -> std::convertible_to<const std::tuple_element_t<N, T>&>;
+};
+
+template <class T>
+concept tuple_like = !std::is_reference_v<T> && requires(T t) {
+  typename std::tuple_size<T>::type;
+  requires std::derived_from<
+      std::tuple_size<T>,
+      std::integral_constant<std::size_t, std::tuple_size_v<T>>>;
+}
+&&[]<std::size_t... N>(std::index_sequence<N...>) {
+  return (has_tuple_element<T, N> && ...);
+}
+(std::make_index_sequence<std::tuple_size_v<T>>());
+#endif
+
+} // namespace detail
+
 enum class MemoryOrder {
   Fortran = cnpypp_memory_order_fortran,
   C = cnpypp_memory_order_c,
