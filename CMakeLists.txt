@@ -5,9 +5,7 @@ project(CNPYpp LANGUAGES CXX C)
 include(GNUInstallDirs)
 
 find_package(ZLIB REQUIRED)
-find_package(Boost COMPONENTS filesystem REQUIRED)
-
-include_directories(${ZLIB_INCLUDE_DIRS})
+find_package(Boost 1.72 COMPONENTS filesystem REQUIRED)
 
 add_library(cnpy++ "cnpy++.cpp" "c_interface.c")
 target_compile_features(cnpy++ PUBLIC cxx_std_20)

@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <climits>
 #include <complex>
 #include <cstring>
 #include <fstream>
@@ -23,6 +24,7 @@
 #include <utility>
 #include <vector>
 
+#include <boost/endian/buffers.hpp>
 #include <zlib.h>
 
 #include <cnpy++.h>
@@ -107,7 +109,7 @@ template <typename F> char constexpr map_type(std::complex<F>) { return 'c'; }
 template <typename T> char constexpr map_type(T) {
   static_assert(std::is_arithmetic_v<T>, "only arithmetic types supported");
 
-  // bool not supported at the moment (-> std::vector<bool> etc.)
+  // bool not supported at the moment (-> std::vector<bool> issues etc.)
   /*if constexpr (std::is_same_v<T, bool>) {
     return 'b';
   }*/
@@ -194,13 +196,17 @@ void write_data(TConstInputIterator start, size_t nels, std::ostream& fs) {
   }
 }
 
-template <typename T>
+template <typename T, std::enable_if_t<std::is_integral_v<T>, int> = 0>
 std::vector<char>& operator+=(std::vector<char>& lhs, const T rhs) {
   // write in little endian
-  for (size_t byte = 0; byte < sizeof(T); byte++) {
-    char val = *((char*)&rhs + byte);
-    lhs.push_back(val);
+  boost::endian::endian_buffer<boost::endian::order::little, T,
+                               sizeof(T) * CHAR_BIT> const buffer{rhs};
+
+  for (auto const* ptr = buffer.data(); ptr < buffer.data() + sizeof(T);
+       ++ptr) {
+    lhs.push_back(*ptr);
   }
+
   return lhs;
 }
 

@@ -367,8 +367,8 @@ cnpypp::NpyArray cnpypp::npy_load(std::string const& fname) {
 }
 
 std::vector<char> cnpypp::create_npy_header(const std::vector<size_t>& shape,
-                                    char dtype, int size,
-                                    MemoryOrder memory_order) {
+                                            char dtype, int size,
+                                            MemoryOrder memory_order) {
   std::vector<char> dict;
   append(dict, "{'descr': '");
   dict += BigEndianTest();
