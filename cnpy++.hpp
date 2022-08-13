@@ -395,10 +395,22 @@ void npz_save(std::string const& zipname, std::string fname,
   fs.write(&footer[0], sizeof(char) * footer.size());
 }
 
-template <typename TConstInputIterator>
-void npy_save(std::string const& fname, TConstInputIterator first,
-              TConstInputIterator last, std::string_view mode = "w") {
-  npy_save(fname, first, {std::distance(first, last)}, mode);
+template <typename TForwardIterator>
+void npy_save(std::string const& fname, TForwardIterator first,
+              TForwardIterator last, std::string_view mode = "w") {
+  static_assert(
+      std::is_base_of_v<
+          std::forward_iterator_tag,
+          typename std::iterator_traits<TForwardIterator>::iterator_category>,
+      "forward iterator necessary");
+
+  auto const dist = std::distance(first, last);
+  if (dist < 0) {
+    throw std::runtime_error(
+        "npy_save() called with negative-distance iterators");
+  }
+
+  npy_save(fname, first, {static_cast<size_t>(dist)}, mode);
 }
 
 template <typename T>
