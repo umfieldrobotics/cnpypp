@@ -8,7 +8,7 @@ find_package(ZLIB REQUIRED)
 find_package(Boost 1.72 COMPONENTS filesystem REQUIRED)
 
 add_library(cnpy++ "cnpy++.cpp" "c_interface.c")
-target_compile_features(cnpy++ PUBLIC cxx_std_20)
+target_compile_features(cnpy++ PUBLIC cxx_std_17)
 target_include_directories(cnpy++ PUBLIC ${Boost_INCLUDE_DIR} ${ZLIB_INCLUDE_DIRS})
 target_include_directories(cnpy++ SYSTEM PUBLIC $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}>)
 target_link_libraries(cnpy++ PRIVATE ${ZLIB_LIBRARIES} Boost::filesystem)
