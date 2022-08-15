@@ -37,3 +37,8 @@ add_executable(range_example range_example.cpp)
 target_link_libraries(range_example cnpy++)
 target_compile_features(range_example PRIVATE cxx_std_20)
 set_property(TARGET range_example PROPERTY CXX_EXTENSIONS OFF)
+
+find_package(range-v3)
+add_executable(range_zip_example range_zip_example.cpp)
+target_link_libraries(range_zip_example cnpy++ range-v3::range-v3)
+set_property(TARGET range_zip_example PROPERTY CXX_EXTENSIONS OFF)
