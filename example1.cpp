@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <array>
+#include <cstddef>
 #include <cstdlib>
 #include <functional>
 #include <iostream>
@@ -8,6 +9,8 @@
 #include <numeric>
 #include <string>
 #include <string_view>
+
+#include <boost/iterator/zip_iterator.hpp>
 
 #include "cnpy++.hpp"
 
@@ -208,6 +211,17 @@ int main() {
         return EXIT_FAILURE;
       }
     }
+  }
+
+  // tuples written to NPY with structured data type
+  {
+    std::vector<std::tuple<int32_t, int8_t, int16_t>> const tupleVec{
+        {0xaaaaaaaa, 0xbb, 0xcccc},
+        {0xdddddddd, 0xee, 0xffff},
+        {0x99999999, 0x88, 0x7777}};
+
+    cnpypp::npy_save("structured.npy", {"a", "b", "c"}, tupleVec.begin(),
+                     {tupleVec.size()});
   }
 
   return EXIT_SUCCESS;

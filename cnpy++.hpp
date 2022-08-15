@@ -6,6 +6,7 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <cassert>
 #include <climits>
 #include <complex>
@@ -24,6 +25,7 @@
 #include <utility>
 #include <vector>
 
+#include <boost/core/span.hpp>
 #include <boost/endian/buffers.hpp>
 #include <zlib.h>
 
@@ -153,6 +155,12 @@ std::vector<char> create_npy_header(const std::vector<size_t>& shape,
                                     char dtype, int size,
                                     MemoryOrder = MemoryOrder::C);
 
+std::vector<char> create_npy_header(std::vector<size_t> const& shape,
+                                    boost::span<std::string_view const> labels,
+                                    boost::span<char const> dtypes,
+                                    boost::span<size_t const> sizes,
+                                    MemoryOrder memory_order);
+
 void parse_npy_header(std::istream&, size_t& word_size,
                       std::vector<size_t>& shape, MemoryOrder& memory_order);
 
@@ -168,6 +176,94 @@ npz_t npz_load(std::string const& fname);
 NpyArray npz_load(std::string const& fname, std::string const& varname);
 
 NpyArray npy_load(std::string const& fname);
+
+namespace detail {
+template <template <typename...> class Template, typename T>
+struct is_specialization_of : std::false_type {};
+
+template <template <typename...> class Template, typename... Args>
+struct is_specialization_of<Template, Template<Args...>> : std::true_type {};
+
+template <template <typename...> class Template, typename... Args>
+bool constexpr is_specialization_of_v =
+    is_specialization_of<Template, Args...>::value;
+} // namespace detail
+
+template <typename Tup> struct tuple_info {
+  static_assert(
+      detail::is_specialization_of_v<std::tuple, Tup> ||
+          detail::is_specialization_of_v<std::pair, Tup>,
+      "must provide std::tuple-like type"); // TODO: check/allow std::array<>
+
+  static auto constexpr size = std::tuple_size_v<Tup>;
+
+private:
+  static std::array<char, size> constexpr getDataTypes() {
+    std::array<char, size> types{};
+    getDataTypes_impl<0>(types);
+    return types;
+  }
+
+  static std::array<size_t, size> constexpr getElementSizes() {
+    std::array<size_t, size> sizes{};
+    getSizes_impl<0>(sizes);
+    return sizes;
+  }
+
+public:
+  static std::array<char, size> constexpr data_types = getDataTypes();
+  static std::array<size_t, size> constexpr element_sizes = getElementSizes();
+
+private:
+  static size_t constexpr sum_size_impl() {
+    size_t sum{};
+
+    for (auto const& v : element_sizes) {
+      sum += v;
+    }
+
+    return sum;
+  }
+
+public:
+  static size_t constexpr sum_sizes = sum_size_impl();
+
+private:
+  static std::array<size_t, size> constexpr calc_offsets() {
+    std::array<size_t, size> offsets{};
+    offsets[0] = 0;
+    calc_offsets_impl<1>(offsets);
+    return offsets;
+  }
+
+public:
+  static std::array<size_t, size> constexpr offsets = calc_offsets();
+
+private:
+  template <size_t k>
+  static void constexpr getDataTypes_impl(std::array<char, size>& sizes) {
+    if constexpr (k < size) {
+      sizes[k] = map_type(std::tuple_element_t<k, Tup>{});
+      getDataTypes_impl<k + 1>(sizes);
+    }
+  }
+
+  template <int k>
+  static void constexpr getSizes_impl(std::array<size_t, size>& sizes) {
+    if constexpr (k < size) {
+      sizes[k] = sizeof(std::tuple_element_t<k, Tup>);
+      getSizes_impl<k + 1>(sizes);
+    }
+  }
+
+  template <int k>
+  static void constexpr calc_offsets_impl(std::array<size_t, size>& offsets) {
+    if constexpr (k < size) {
+      offsets[k] = offsets[k - 1] + element_sizes[k - 1];
+      calc_offsets_impl<k + 1>(offsets);
+    }
+  }
+};
 
 template <typename TConstInputIterator>
 bool constexpr is_contiguous_v =
@@ -216,6 +312,52 @@ void write_data(TConstInputIterator start, size_t nels, std::ostream& fs) {
       ++elements_written;
     }
     write_data(buffer.get(), count, fs);
+  }
+}
+
+template <int k = 0, typename... Args>
+void fill(std::tuple<Args...> const& tup, char* buffer) {
+  auto constexpr offsets = tuple_info<std::tuple<Args...>>::offsets;
+
+  if constexpr (k < sizeof...(Args)) {
+    auto const& elem = std::get<k>(tup);
+    auto constexpr elem_size = sizeof(elem);
+    static_assert(tuple_info<std::tuple<Args...>>::element_sizes[k] ==
+                  elem_size); // sanity check
+
+    char const* const beg = reinterpret_cast<char const*>(&elem);
+
+    std::copy(beg, beg + elem_size, buffer + offsets[k]);
+    fill<k + 1, Args...>(tup, buffer);
+  }
+}
+
+template <typename TTupleIterator>
+void write_data_tuple(TTupleIterator start, size_t nels, std::ostream& fs) {
+  using value_type = typename std::iterator_traits<TTupleIterator>::value_type;
+  static auto constexpr sizes = tuple_info<value_type>::element_sizes;
+  static auto constexpr sum = tuple_info<value_type>::sum_sizes;
+  static auto constexpr offsets = tuple_info<value_type>::offsets;
+
+  size_t constexpr buffer_size = 0x10000; // number of tuples
+
+  auto buffer = std::make_unique<char[]>(buffer_size * sum);
+
+  size_t elements_written = 0;
+  auto it = start;
+
+  while (elements_written < nels) {
+    size_t count = 0;
+    while (count < buffer_size && elements_written < nels) {
+      auto const& tup = *it;
+
+      fill(tup, buffer.get() + count * sum);
+
+      ++it;
+      ++count;
+      ++elements_written;
+    }
+    write_data(buffer.get(), count * sum, fs);
   }
 }
 
@@ -434,6 +576,86 @@ void npy_save(std::string const& fname, TForwardIterator first,
   }
 
   npy_save(fname, first, {static_cast<size_t>(dist)}, mode);
+}
+
+template <typename TTupleIterator>
+void npy_save(std::string const& fname,
+              std::vector<std::string_view> const& labels, TTupleIterator first,
+              std::vector<size_t> const& shape, std::string_view mode = "w",
+              MemoryOrder memory_order = MemoryOrder::C) {
+  using value_type = typename std::iterator_traits<TTupleIterator>::value_type;
+
+  // static_assert(detail::is_specialization_of_v<std::tuple, value_type>,
+  // "iterator to tuple expected");
+
+  if (labels.size() != std::tuple_size_v<value_type>) {
+    throw std::runtime_error("number of labels does not match tuple size");
+  }
+
+  auto constexpr dtypes = tuple_info<value_type>::data_types;
+  ;
+  auto constexpr sizes = tuple_info<value_type>::element_sizes;
+
+  std::fstream fs;
+  std::vector<size_t>
+      true_data_shape; // if appending, the shape of existing + new data
+
+  if (mode == "a" && _exists(fname)) {
+    // file exists. we need to append to it. read the header, modify the array
+    // size
+    fs.open(fname,
+            std::ios_base::binary | std::ios_base::in | std::ios_base::out);
+
+    size_t word_size;
+    MemoryOrder memory_order_exist;
+    parse_npy_header(fs, word_size, true_data_shape, memory_order_exist);
+    if (memory_order != memory_order_exist) {
+      throw std::runtime_error{
+          "libcnpy++ error in npy_save(): memory order does not match"};
+    }
+
+    if (word_size != sizeof(value_type)) {
+      std::stringstream ss;
+      ss << "libnpy error: " << fname << " has word size " << word_size
+         << " but npy_save appending data sized " << sizeof(value_type);
+      throw std::runtime_error{ss.str().c_str()};
+    }
+
+    if (true_data_shape.size() != shape.size()) {
+      std::stringstream ss;
+      std::cerr << "libnpy error: npy_save attempting to append misdimensioned "
+                   "data to "
+                << fname;
+      throw std::runtime_error{ss.str().c_str()};
+    }
+
+    if (!std::equal(std::next(shape.cbegin()), shape.cend(),
+                    std::next(true_data_shape.begin()))) {
+      std::stringstream ss;
+      ss << "libnpy error: npy_save attempting to append misshaped data to "
+         << fname;
+      throw std::runtime_error{ss.str().c_str()};
+    }
+
+    true_data_shape[0] += shape[0];
+
+  } else { // write mode
+    fs.open(fname, std::ios_base::binary | std::ios_base::out);
+    true_data_shape = shape;
+  }
+
+  auto const header =
+      create_npy_header(shape, labels, dtypes, sizes, memory_order);
+
+  size_t const nels =
+      std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<size_t>());
+
+  fs.seekp(0, std::ios_base::beg);
+  fs.write(&header[0], sizeof(char) * header.size());
+  fs.seekp(0, std::ios_base::end);
+
+  // now write actual data
+  write_data_tuple(first, nels, fs);
 }
 
 template <typename T>
