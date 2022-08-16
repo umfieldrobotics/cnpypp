@@ -39,6 +39,7 @@ bool cnpypp::_exists(std::string const& fname) {
 }
 
 static std::regex const num_regex("[0-9][0-9]*");
+static std::regex const dtype_tuple_regex("\('(\w+)', '([<>|])(\w)(\d+)'\)");
 
 void cnpypp::parse_npy_header(std::istream::char_type* buffer,
                               size_t& word_size, std::vector<size_t>& shape,
