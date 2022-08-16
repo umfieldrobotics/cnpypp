@@ -9,6 +9,7 @@ find_package(Boost 1.72 COMPONENTS filesystem REQUIRED)
 
 add_library(cnpy++ "cnpy++.cpp" "c_interface.c")
 target_compile_features(cnpy++ PUBLIC cxx_std_17)
+set_property(TARGET cnpy++ PROPERTY CXX_EXTENSIONS OFF)
 target_include_directories(cnpy++ PUBLIC ${Boost_INCLUDE_DIR} ${ZLIB_INCLUDE_DIRS})
 target_include_directories(cnpy++ SYSTEM PUBLIC $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}>)
 target_link_libraries(cnpy++ PRIVATE ${ZLIB_LIBRARIES} Boost::filesystem)
@@ -27,3 +28,8 @@ target_link_libraries(example1 cnpy++)
 
 add_executable(example_c example_c.c)
 target_link_libraries(example_c cnpy++)
+
+add_executable(range_example range_example.cpp)
+target_link_libraries(range_example cnpy++)
+target_compile_features(range_example PRIVATE cxx_std_20)
+set_property(TARGET range_example PROPERTY CXX_EXTENSIONS OFF)
