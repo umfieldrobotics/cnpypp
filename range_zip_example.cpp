@@ -13,7 +13,7 @@ int main() {
       i | ranges::views::transform([](auto x) { return x * x * x; });
 
   auto const z = ranges::views::zip(i, sq, trip);
-  cnpypp::npy_save("structured.npy", {"a", "b", "c"}, z.begin(), {z.size()});
+  cnpypp::npy_save("range_zip_data.npy", {"a", "b", "c"}, z.begin(), {z.size()});
 
   return EXIT_SUCCESS;
 }
