@@ -224,5 +224,15 @@ int main() {
                      {tupleVec.size()});
   }
 
+  // std::array written as structured type
+  {
+
+    std::vector<std::array<int8_t, 2>> const arrVec{
+        {0x11, 0x22}, {0x33, 0x44}, {0x55, 0x66}};
+
+    cnpypp::npy_save("structured2.npy", {"a", "b"}, arrVec.begin(),
+                     {arrVec.size()});
+  }
+
   return EXIT_SUCCESS;
 }

@@ -25,8 +25,8 @@
 #include <utility>
 #include <vector>
 
-#include <boost/core/span.hpp>
 #include <boost/endian/buffers.hpp>
+#include <gsl/span>
 #include <zlib.h>
 
 #include <cnpy++.h>
@@ -151,14 +151,13 @@ template <typename T> char constexpr map_type(T) {
 char BigEndianTest();
 bool _exists(std::string const&); // calls boost::filesystem::exists()
 
-std::vector<char> create_npy_header(const std::vector<size_t>& shape,
-                                    char dtype, int size,
-                                    MemoryOrder = MemoryOrder::C);
+std::vector<char> create_npy_header(gsl::span<size_t const> shape, char dtype,
+                                    int size, MemoryOrder = MemoryOrder::C);
 
-std::vector<char> create_npy_header(std::vector<size_t> const& shape,
-                                    boost::span<std::string_view const> labels,
-                                    boost::span<char const> dtypes,
-                                    boost::span<size_t const> sizes,
+std::vector<char> create_npy_header(gsl::span<size_t const> shape,
+                                    gsl::span<std::string_view const> labels,
+                                    gsl::span<char const> dtypes,
+                                    gsl::span<size_t const> sizes,
                                     MemoryOrder memory_order);
 
 void parse_npy_header(std::istream&, size_t& word_size,
@@ -187,12 +186,21 @@ struct is_specialization_of<Template, Template<Args...>> : std::true_type {};
 template <template <typename...> class Template, typename... Args>
 bool constexpr is_specialization_of_v =
     is_specialization_of<Template, Args...>::value;
+
+template<class T>
+struct is_std_array : std::false_type {};
+
+template<class T, std::size_t N>
+struct is_std_array<std::array<T, N>> : std::true_type {};
+
+template <typename T>
+bool constexpr is_std_array_v = is_std_array<T>::value;
 } // namespace detail
 
 template <typename Tup> struct tuple_info {
   static_assert(
       detail::is_specialization_of_v<std::tuple, Tup> ||
-          detail::is_specialization_of_v<std::pair, Tup>,
+          detail::is_specialization_of_v<std::pair, Tup> || detail::is_std_array_v<Tup>,
       "must provide std::tuple-like type"); // TODO: check/allow std::array<>
 
   static auto constexpr size = std::tuple_size_v<Tup>;
@@ -240,7 +248,7 @@ public:
   static std::array<size_t, size> constexpr offsets = calc_offsets();
 
 private:
-  template <size_t k>
+  template <int k>
   static void constexpr getDataTypes_impl(std::array<char, size>& sizes) {
     if constexpr (k < size) {
       sizes[k] = map_type(std::tuple_element_t<k, Tup>{});
@@ -315,20 +323,19 @@ void write_data(TConstInputIterator start, size_t nels, std::ostream& fs) {
   }
 }
 
-template <int k = 0, typename... Args>
-void fill(std::tuple<Args...> const& tup, char* buffer) {
-  auto constexpr offsets = tuple_info<std::tuple<Args...>>::offsets;
+template <typename T, int k=0>
+void fill(T const& tup, char* buffer) {
+  auto constexpr offsets = tuple_info<T>::offsets;
 
-  if constexpr (k < sizeof...(Args)) {
+  if constexpr (k < tuple_info<T>::size) {
     auto const& elem = std::get<k>(tup);
     auto constexpr elem_size = sizeof(elem);
-    static_assert(tuple_info<std::tuple<Args...>>::element_sizes[k] ==
-                  elem_size); // sanity check
+    static_assert(tuple_info<T>::element_sizes[k] == elem_size); // sanity check
 
     char const* const beg = reinterpret_cast<char const*>(&elem);
 
     std::copy(beg, beg + elem_size, buffer + offsets[k]);
-    fill<k + 1, Args...>(tup, buffer);
+    fill<T, k+1>(tup, buffer);
   }
 }
 
@@ -351,7 +358,7 @@ void write_data_tuple(TTupleIterator start, size_t nels, std::ostream& fs) {
     while (count < buffer_size && elements_written < nels) {
       auto const& tup = *it;
 
-      fill(tup, buffer.get() + count * sum);
+      fill<value_type>(tup, buffer.get() + count * sum);
 
       ++it;
       ++count;
@@ -379,7 +386,7 @@ std::vector<char>& append(std::vector<char>&, std::string_view);
 
 template <typename TConstInputIterator>
 void npy_save(std::string const& fname, TConstInputIterator start,
-              std::vector<size_t> const& shape, std::string_view mode = "w",
+              gsl::span<size_t const> const shape, std::string_view mode = "w",
               MemoryOrder memory_order = MemoryOrder::C) {
   std::fstream fs;
   std::vector<size_t>
@@ -417,7 +424,7 @@ void npy_save(std::string const& fname, TConstInputIterator start,
       throw std::runtime_error{ss.str().c_str()};
     }
 
-    if (!std::equal(std::next(shape.cbegin()), shape.cend(),
+    if (!std::equal(std::next(shape.begin()), shape.end(),
                     std::next(true_data_shape.begin()))) {
       std::stringstream ss;
       ss << "libnpy error: npy_save attempting to append misshaped data to "
@@ -429,7 +436,7 @@ void npy_save(std::string const& fname, TConstInputIterator start,
 
   } else { // write mode
     fs.open(fname, std::ios_base::binary | std::ios_base::out);
-    true_data_shape = shape;
+    true_data_shape = std::vector<size_t>{shape.begin(), shape.end()};
   }
 
   std::vector<char> const header =
@@ -447,8 +454,18 @@ void npy_save(std::string const& fname, TConstInputIterator start,
 }
 
 template <typename TConstInputIterator>
+void npy_save(std::string const& fname, TConstInputIterator start,
+              std::initializer_list<size_t> const shape,
+              std::string_view mode = "w",
+              MemoryOrder memory_order = MemoryOrder::C) {
+  npy_save<TConstInputIterator>(fname, start,
+                                gsl::span{std::data(shape), shape.size()}, mode,
+                                memory_order);
+}
+
+template <typename TConstInputIterator>
 void npz_save(std::string const& zipname, std::string fname,
-              TConstInputIterator start, const std::vector<size_t>& shape,
+              TConstInputIterator start, gsl::span<size_t const> const shape,
               std::string_view mode = "w",
               MemoryOrder memory_order = MemoryOrder::C) {
   using value_type =
@@ -560,6 +577,16 @@ void npz_save(std::string const& zipname, std::string fname,
   fs.write(&footer[0], sizeof(char) * footer.size());
 }
 
+template <typename TConstInputIterator>
+void npz_save(std::string const& zipname, std::string fname,
+              TConstInputIterator start,
+              std::initializer_list<size_t const> shape,
+              std::string_view mode = "w",
+              MemoryOrder memory_order = MemoryOrder::C) {
+  npz_save(zipname, std::move(fname), start,
+           gsl::span{std::data(shape), shape.size()}, mode, memory_order);
+}
+
 template <typename TForwardIterator>
 void npy_save(std::string const& fname, TForwardIterator first,
               TForwardIterator last, std::string_view mode = "w") {
@@ -578,22 +605,24 @@ void npy_save(std::string const& fname, TForwardIterator first,
   npy_save(fname, first, {static_cast<size_t>(dist)}, mode);
 }
 
+template <typename T>
+void npy_save(std::string const& fname, gsl::span<T const> data,
+              std::string_view mode = "w") {
+  npy_save<T>(fname, data.cbegin(), data.cend(), mode);
+}
+
 template <typename TTupleIterator>
 void npy_save(std::string const& fname,
               std::vector<std::string_view> const& labels, TTupleIterator first,
-              std::vector<size_t> const& shape, std::string_view mode = "w",
+              gsl::span<size_t const> const shape, std::string_view mode = "w",
               MemoryOrder memory_order = MemoryOrder::C) {
   using value_type = typename std::iterator_traits<TTupleIterator>::value_type;
-
-  // static_assert(detail::is_specialization_of_v<std::tuple, value_type>,
-  // "iterator to tuple expected");
 
   if (labels.size() != std::tuple_size_v<value_type>) {
     throw std::runtime_error("number of labels does not match tuple size");
   }
 
   auto constexpr dtypes = tuple_info<value_type>::data_types;
-  ;
   auto constexpr sizes = tuple_info<value_type>::element_sizes;
 
   std::fstream fs;
@@ -629,7 +658,7 @@ void npy_save(std::string const& fname,
       throw std::runtime_error{ss.str().c_str()};
     }
 
-    if (!std::equal(std::next(shape.cbegin()), shape.cend(),
+    if (!std::equal(std::next(shape.begin()), shape.end(),
                     std::next(true_data_shape.begin()))) {
       std::stringstream ss;
       ss << "libnpy error: npy_save attempting to append misshaped data to "
@@ -641,7 +670,7 @@ void npy_save(std::string const& fname,
 
   } else { // write mode
     fs.open(fname, std::ios_base::binary | std::ios_base::out);
-    true_data_shape = shape;
+    true_data_shape = std::vector<size_t>{shape.begin(), shape.end()};
   }
 
   auto const header =
@@ -658,10 +687,15 @@ void npy_save(std::string const& fname,
   write_data_tuple(first, nels, fs);
 }
 
-template <typename T>
-void npz_save(std::string const& zipname, std::string_view fname,
-              const std::vector<T>& data, std::string_view mode = "w") {
-  npz_save(zipname, fname, &data[0], {data.size()}, mode);
+template <typename TTupleIterator>
+void npy_save(std::string const& fname,
+              std::vector<std::string_view> const& labels, TTupleIterator first,
+              std::initializer_list<size_t const> shape,
+              std::string_view mode = "w",
+              MemoryOrder memory_order = MemoryOrder::C) {
+  npy_save<TTupleIterator>(fname, labels, first,
+                           gsl::span{std::data(shape), shape.size()}, mode,
+                           memory_order);
 }
 
 } // namespace cnpypp

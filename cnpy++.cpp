@@ -16,6 +16,7 @@
 
 #include <boost/endian/conversion.hpp>
 #include <boost/filesystem.hpp>
+#include <gsl/span>
 
 #include "cnpy++.hpp"
 
@@ -39,19 +40,19 @@ bool cnpypp::_exists(std::string const& fname) {
 }
 
 static std::regex const num_regex("[0-9][0-9]*");
-static std::regex const dtype_tuple_regex("\('(\w+)', '([<>|])(\w)(\d+)'\)");
+static std::regex const
+    dtype_tuple_regex("\\('(\\w+)', '([<>|])(\\w)(\\d+)'\\)");
 
 void cnpypp::parse_npy_header(std::istream::char_type* buffer,
                               size_t& word_size, std::vector<size_t>& shape,
                               cnpypp::MemoryOrder& memory_order) {
-  // std::string magic_string(buffer,6);
   uint8_t const major_version = *reinterpret_cast<uint8_t*>(buffer + 6);
   uint8_t const minor_version = *reinterpret_cast<uint8_t*>(buffer + 7);
   uint16_t const header_len =
       boost::endian::endian_load<boost::uint16_t, 2,
                                  boost::endian::order::little>(
           (unsigned char*)buffer + 8);
-  std::string header(reinterpret_cast<char*>(buffer + 9), header_len);
+  std::string header(reinterpret_cast<char*>(buffer + 0x0a), header_len);
 
   if (!(major_version == 1 && minor_version == 0)) {
     throw std::runtime_error("parse_npy_header: version not supported");
@@ -368,9 +369,9 @@ cnpypp::NpyArray cnpypp::npy_load(std::string const& fname) {
 }
 
 std::vector<char> cnpypp::create_npy_header(
-    std::vector<size_t> const& shape,
-    boost::span<std::string_view const> labels, boost::span<char const> dtypes,
-    boost::span<size_t const> sizes, MemoryOrder memory_order) {
+    gsl::span<size_t const> const shape,
+    gsl::span<std::string_view const> labels, gsl::span<char const> dtypes,
+    gsl::span<size_t const> sizes, MemoryOrder memory_order) {
   std::vector<char> dict;
   append(dict, "{'descr': [");
 
@@ -432,7 +433,7 @@ std::vector<char> cnpypp::create_npy_header(
   return header;
 }
 
-std::vector<char> cnpypp::create_npy_header(const std::vector<size_t>& shape,
+std::vector<char> cnpypp::create_npy_header(gsl::span<size_t const> const shape,
                                             char dtype, int size,
                                             MemoryOrder memory_order) {
   std::vector<char> dict;
