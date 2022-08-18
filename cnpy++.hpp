@@ -160,8 +160,11 @@ std::vector<char> create_npy_header(gsl::span<size_t const> shape,
                                     gsl::span<size_t const> sizes,
                                     MemoryOrder memory_order);
 
-void parse_npy_header(std::istream&, size_t& word_size,
-                      std::vector<size_t>& shape, MemoryOrder& memory_order);
+void parse_npy_header(std::istream& fs, std::vector<size_t>& word_sizes,
+                      std::vector<char>& data_types,
+                      std::vector<std::string>& labels,
+                      std::vector<size_t>& shape,
+                      cnpypp::MemoryOrder& memory_order);
 
 void parse_npy_header(std::istream::char_type* buffer, size_t& word_size,
                       std::vector<size_t>& shape, MemoryOrder& memory_order);
@@ -187,23 +190,26 @@ template <template <typename...> class Template, typename... Args>
 bool constexpr is_specialization_of_v =
     is_specialization_of<Template, Args...>::value;
 
-template<class T>
-struct is_std_array : std::false_type {};
+template <class T> struct is_std_array : std::false_type {};
 
-template<class T, std::size_t N>
+template <class T, std::size_t N>
 struct is_std_array<std::array<T, N>> : std::true_type {};
 
-template <typename T>
-bool constexpr is_std_array_v = is_std_array<T>::value;
+template <typename T> bool constexpr is_std_array_v = is_std_array<T>::value;
 } // namespace detail
 
 template <typename Tup> struct tuple_info {
-  static_assert(
-      detail::is_specialization_of_v<std::tuple, Tup> ||
-          detail::is_specialization_of_v<std::pair, Tup> || detail::is_std_array_v<Tup>,
-      "must provide std::tuple-like type"); // TODO: check/allow std::array<>
+  static_assert(detail::is_specialization_of_v<std::tuple, Tup> ||
+                    detail::is_specialization_of_v<std::pair, Tup> ||
+                    detail::is_std_array_v<Tup>,
+                "must provide std::tuple-like type");
 
   static auto constexpr size = std::tuple_size_v<Tup>;
+
+  // prevent any instantiation
+  tuple_info() = delete;
+  tuple_info(tuple_info<Tup> const&) = delete;
+  tuple_info& operator=(tuple_info const&) = delete;
 
 private:
   static std::array<char, size> constexpr getDataTypes() {
@@ -323,8 +329,7 @@ void write_data(TConstInputIterator start, size_t nels, std::ostream& fs) {
   }
 }
 
-template <typename T, int k=0>
-void fill(T const& tup, char* buffer) {
+template <typename T, int k = 0> void fill(T const& tup, char* buffer) {
   auto constexpr offsets = tuple_info<T>::offsets;
 
   if constexpr (k < tuple_info<T>::size) {
@@ -335,7 +340,7 @@ void fill(T const& tup, char* buffer) {
     char const* const beg = reinterpret_cast<char const*>(&elem);
 
     std::copy(beg, beg + elem_size, buffer + offsets[k]);
-    fill<T, k+1>(tup, buffer);
+    fill<T, k + 1>(tup, buffer);
   }
 }
 
@@ -403,7 +408,17 @@ void npy_save(std::string const& fname, TConstInputIterator start,
 
     size_t word_size;
     MemoryOrder memory_order_exist;
-    parse_npy_header(fs, word_size, true_data_shape, memory_order_exist);
+
+    std::vector<size_t> word_sizes_exist;
+    std::vector<char> data_types_exist;
+    std::vector<std::string> labels_exist;
+    cnpypp::MemoryOrder memory_order_exist;
+
+    parse_npy_header(fs, word_size, data_types, labels_exist, true_data_shape,
+                     memory_order_exist);
+
+    // TODO: continue here
+
     if (memory_order != memory_order_exist) {
       throw std::runtime_error{
           "libcnpy++ error in npy_save(): memory order does not match"};

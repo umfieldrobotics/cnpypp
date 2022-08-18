@@ -41,7 +41,7 @@ bool cnpypp::_exists(std::string const& fname) {
 
 static std::regex const num_regex("[0-9][0-9]*");
 static std::regex const
-    dtype_tuple_regex("\\('(\\w+)', '([<>|])(\\w)(\\d+)'\\)");
+    dtype_tuple_regex("\\('(\\w+)', '([<>|])([a-zA-z])(\\d+)'\\)");
 
 void cnpypp::parse_npy_header(std::istream::char_type* buffer,
                               size_t& word_size, std::vector<size_t>& shape,
@@ -98,68 +98,139 @@ void cnpypp::parse_npy_header(std::istream::char_type* buffer,
   word_size = atoi(str_ws.substr(0, loc2).c_str());
 }
 
-void cnpypp::parse_npy_header(std::istream& fs, size_t& word_size,
+static std::string_view const npy_magic_string = "\x93NUMPY";
+
+void cnpypp::parse_npy_header(std::istream& fs, std::vector<size_t>& word_sizes,
+                              std::vector<char>& data_types,
+                              std::vector<std::string>& labels,
                               std::vector<size_t>& shape,
                               cnpypp::MemoryOrder& memory_order) {
-  fs.seekg(11, std::ios_base::cur);
+  auto const pos_start = fs.tellg();
 
-  auto const pos = fs.tellg();
-  char buf[20];
-  fs.read(buf, 11);
+  std::array<std::istream::char_type, 10> buffer;
+  fs.read(buffer.data(), 10);
 
-  fs.seekg(pos, std::ios_base::beg);
+  if (!std::equal(npy_magic_string.begin(), npy_magic_string.end(),
+                  buffer.cbegin())) {
+    throw std::runtime_error("parse_npy_header: NPY magic string not found");
+  }
 
-  std::string header;
-  std::getline(fs, header);
+  uint8_t const major_version = buffer[6];
+  uint8_t const minor_version = buffer[7];
 
-  size_t loc1, loc2;
-
-  // fortran order
-  loc1 = header.find("fortran_order");
-  if (loc1 == std::string::npos)
+  if (major_version != 1 || minor_version != 0) {
     throw std::runtime_error(
-        "parse_npy_header: failed to find header keyword: 'fortran_order'");
-  loc1 += 16;
-  memory_order = (header.substr(loc1, 4) == "True")
-                     ? cnpypp::MemoryOrder::Fortran
-                     : cnpypp::MemoryOrder::C;
+        "parse_npy_header: NPY format version not supported");
+  }
 
-  // shape
-  loc1 = header.find("(");
-  loc2 = header.find(")");
-  if (loc1 == std::string::npos || loc2 == std::string::npos)
-    throw std::runtime_error(
-        "parse_npy_header: failed to find header keyword: '(' or ')'");
+  uint16_t const header_len =
+      boost::endian::endian_load<boost::uint16_t, 2,
+                                 boost::endian::order::little>(
+          reinterpret_cast<unsigned char*>(&buffer[8]));
 
-  std::smatch sm;
+  auto const header_buffer =
+      std::make_unique<std::istream::char_type[]>(header_len);
+  fs.read(header_buffer.get(), header_len);
+
+  if (header_buffer[header_len - 1] != '\n') {
+    throw std::runtime_error("invalid header: missing terminating newline");
+  } else if (header_buffer[0] != '{') {
+    throw std::runtime_error("invalid header: malformed dictionary");
+  }
+
+  std::string_view const dict{header_buffer.get(), header_len};
+
+  if (std::cmatch matches;
+      !std::regex_search(dict.begin(), dict.end(), matches,
+                         std::regex{"'fortran_order': (True|False)"})) {
+    throw std::runtime_error("invalid header: missing 'fortran_order'");
+  } else {
+    memory_order = (matches[1].str() == "True") ? cnpypp::MemoryOrder::Fortran
+                                                : cnpypp::MemoryOrder::C;
+  }
+
+  word_sizes.clear();
+  data_types.clear();
+  labels.clear();
   shape.clear();
 
-  std::string str_shape = header.substr(loc1 + 1, loc2 - loc1 - 1);
-  while (std::regex_search(str_shape, sm, num_regex)) {
-    shape.push_back(std::stoi(sm[0].str()));
-    str_shape = sm.suffix().str();
+  // read & fill shape
+
+  std::string_view const sh = "'shape': (";
+
+  if (auto const pos_start_shape = dict.find(sh);
+      pos_start_shape == std::string_view::npos) {
+    throw std::runtime_error("invalid header: missing 'shape'");
+  } else {
+    if (auto const pos_end_shape = dict.find(')', pos_start_shape);
+        pos_end_shape == std::string_view::npos) {
+      throw std::runtime_error("invalid header: malformed dictionary");
+    } else {
+      std::regex digit_re{"\\d+"};
+      auto dims_begin =
+          std::cregex_iterator(dict.begin() + pos_start_shape,
+                               dict.begin() + pos_end_shape, digit_re);
+      auto dims_end = std::cregex_iterator();
+
+      for (std::cregex_iterator it = dims_begin; it != dims_end; ++it) {
+        shape.push_back(std::stoi(it->str()));
+      }
+    }
   }
 
-  // endian, word size, data type
-  // byte order code | stands for not applicable.
-  // not sure when this applies except for byte array
-  loc1 = header.find("descr");
-  if (loc1 == std::string::npos)
-    throw std::runtime_error(
-        "parse_npy_header: failed to find header keyword: 'descr'");
-  loc1 += 9;
-  bool const littleEndian = header[loc1] == '<' || header[loc1] == '|';
-  if (!littleEndian) {
-    throw std::runtime_error(
-        "parse_npy_header: data stored in big-endian (not supported)");
+  //
+
+  std::string_view const desc = "'descr': ";
+  if (auto const pos_start_desc = dict.find(desc);
+      pos_start_desc == std::string_view::npos) {
+    throw std::runtime_error("invalid header: missing 'descr'");
+  } else {
+    if (auto const c = dict[pos_start_desc + desc.size()]; c == '\'') {
+      // simple type
+
+      if (std::cmatch matches;
+          !std::regex_search(dict.begin() + pos_start_desc, dict.end(), matches,
+                             std::regex{"'([<>\\|])([a-zA-z])(\\d+)'"})) {
+        throw std::runtime_error(
+            "parse_npy_header: could not parse data type descriptor");
+      } else if (matches[1].str() == ">") {
+        throw std::runtime_error("parse_npy_header: data stored in big-endian "
+                                 "format (not supported)");
+      } else {
+        data_types.push_back(*(matches[2].first));
+        word_sizes.push_back(std::stoi(matches[3].str()));
+      }
+    } else if (c == '[') {
+      // structured type / tuple
+
+      if (auto const pos_end_list =
+              dict.find(']', pos_start_desc + desc.size());
+          pos_end_list == std::string_view::npos) {
+        throw std::runtime_error("invalid header: malformed list in 'descr'");
+      } else {
+        auto tuples_begin = std::cregex_iterator(
+            dict.begin() + pos_start_desc + desc.size(),
+            dict.begin() + pos_end_list, dtype_tuple_regex);
+        auto tuples_end = std::cregex_iterator();
+
+        for (std::cregex_iterator it = tuples_begin; it != tuples_end; ++it) {
+          auto&& match = *it;
+          std::cout << match.str() << std::endl;
+          labels.emplace_back(match[1].str());
+
+          if (match[2].str() == ">") {
+            throw std::runtime_error("parse_npy_header: data stored in "
+                                     "big-endian format (not supported)");
+          }
+
+          data_types.push_back(*(match[3].first));
+          word_sizes.push_back(std::stoi(match[4].str()));
+        }
+      }
+    } else {
+      throw std::runtime_error("invalid header: malformed 'descr'");
+    }
   }
-
-  // char type = header[loc1+1];
-  // assert(type == map_type(T));
-
-  std::string str_ws = header.substr(loc1 + 2);
-  loc2 = str_ws.find("'");
-  word_size = atoi(str_ws.substr(0, loc2).c_str());
 }
 
 void cnpypp::parse_zip_footer(std::istream& fs, uint16_t& nrecs,
