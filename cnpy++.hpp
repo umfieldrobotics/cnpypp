@@ -32,28 +32,6 @@
 #include <cnpy++.h>
 
 namespace cnpypp {
-namespace detail {
-#if __cpp_lib_concepts >= 202002L
-template <class T, std::size_t N>
-concept has_tuple_element = requires(T t) {
-  typename std::tuple_element_t<N, std::remove_const_t<T>>;
-  { get<N>(t) } -> std::convertible_to<const std::tuple_element_t<N, T>&>;
-};
-
-template <class T>
-concept tuple_like = !std::is_reference_v<T> && requires(T t) {
-  typename std::tuple_size<T>::type;
-  requires std::derived_from<
-      std::tuple_size<T>,
-      std::integral_constant<std::size_t, std::tuple_size_v<T>>>;
-}
-&&[]<std::size_t... N>(std::index_sequence<N...>) {
-  return (has_tuple_element<T, N> && ...);
-}
-(std::make_index_sequence<std::tuple_size_v<T>>());
-#endif
-
-} // namespace detail
 
 enum class MemoryOrder {
   Fortran = cnpypp_memory_order_fortran,
@@ -196,6 +174,11 @@ template <class T, std::size_t N>
 struct is_std_array<std::array<T, N>> : std::true_type {};
 
 template <typename T> bool constexpr is_std_array_v = is_std_array<T>::value;
+
+template <typename T>
+bool constexpr is_tuple_like_v =
+    is_std_array_v<T> || is_specialization_of_v<std::pair, T> ||
+    is_specialization_of_v<std::tuple, T>;
 } // namespace detail
 
 template <typename Tup> struct tuple_info {
@@ -406,37 +389,29 @@ void npy_save(std::string const& fname, TConstInputIterator start,
     fs.open(fname,
             std::ios_base::binary | std::ios_base::in | std::ios_base::out);
 
-    size_t word_size;
-    MemoryOrder memory_order_exist;
-
     std::vector<size_t> word_sizes_exist;
     std::vector<char> data_types_exist;
     std::vector<std::string> labels_exist;
     cnpypp::MemoryOrder memory_order_exist;
 
-    parse_npy_header(fs, word_size, data_types, labels_exist, true_data_shape,
-                     memory_order_exist);
+    parse_npy_header(fs, word_sizes_exist, data_types_exist, labels_exist,
+                     true_data_shape, memory_order_exist);
 
-    // TODO: continue here
+    if (sizeof(value_type) != word_sizes_exist.at(0)) {
+      throw std::runtime_error{
+          "npy_save(): appending failed: element size not matching"};
+    } else if (map_type(value_type{}) != data_types_exist.at(0)) {
+      throw std::runtime_error{
+          "npy_save(): appending failed: data type descriptor not matching"};
+    }
 
     if (memory_order != memory_order_exist) {
       throw std::runtime_error{
           "libcnpy++ error in npy_save(): memory order does not match"};
     }
 
-    if (word_size != sizeof(value_type)) {
-      std::stringstream ss;
-      ss << "libnpy error: " << fname << " has word size " << word_size
-         << " but npy_save appending data sized " << sizeof(value_type);
-      throw std::runtime_error{ss.str().c_str()};
-    }
-
     if (true_data_shape.size() != shape.size()) {
-      std::stringstream ss;
-      std::cerr << "libnpy error: npy_save attempting to append misdimensioned "
-                   "data to "
-                << fname;
-      throw std::runtime_error{ss.str().c_str()};
+      throw std::runtime_error{"npy_save: ranks not matching"};
     }
 
     if (!std::equal(std::next(shape.begin()), shape.end(),
@@ -637,8 +612,8 @@ void npy_save(std::string const& fname,
     throw std::runtime_error("number of labels does not match tuple size");
   }
 
-  auto constexpr dtypes = tuple_info<value_type>::data_types;
-  auto constexpr sizes = tuple_info<value_type>::element_sizes;
+  auto constexpr& dtypes = tuple_info<value_type>::data_types;
+  auto constexpr& sizes = tuple_info<value_type>::element_sizes;
 
   std::fstream fs;
   std::vector<size_t>
@@ -650,19 +625,32 @@ void npy_save(std::string const& fname,
     fs.open(fname,
             std::ios_base::binary | std::ios_base::in | std::ios_base::out);
 
-    size_t word_size;
-    MemoryOrder memory_order_exist;
-    parse_npy_header(fs, word_size, true_data_shape, memory_order_exist);
+    std::vector<size_t> word_sizes_exist, shape;
+    std::vector<char> data_types_exist;
+    std::vector<std::string> labels_exist;
+    cnpypp::MemoryOrder memory_order_exist;
+
+    parse_npy_header(fs, word_sizes_exist, data_types_exist, labels_exist,
+                     true_data_shape, memory_order_exist);
+
+    if (tuple_info<value_type>::size != labels_exist.size()) {
+      throw std::runtime_error{
+          "npy_save(): appending failed: sizes not matching"};
+    }
+    if (!std::equal(data_types_exist.cbegin(), data_types_exist.cend(),
+                    dtypes.cbegin())) {
+      throw std::runtime_error{
+          "npy_save(): appending failed: data type descriptors not matching"};
+    }
+    if (!std::equal(word_sizes_exist.cbegin(), word_sizes_exist.cend(),
+                    sizes.cbegin())) {
+      throw std::runtime_error{
+          "npy_save(): appending failed: element sizes not matching"};
+    }
+
     if (memory_order != memory_order_exist) {
       throw std::runtime_error{
           "libcnpy++ error in npy_save(): memory order does not match"};
-    }
-
-    if (word_size != sizeof(value_type)) {
-      std::stringstream ss;
-      ss << "libnpy error: " << fname << " has word size " << word_size
-         << " but npy_save appending data sized " << sizeof(value_type);
-      throw std::runtime_error{ss.str().c_str()};
     }
 
     if (true_data_shape.size() != shape.size()) {

@@ -178,8 +178,6 @@ void cnpypp::parse_npy_header(std::istream& fs, std::vector<size_t>& word_sizes,
     }
   }
 
-  //
-
   std::string_view const desc = "'descr': ";
   if (auto const pos_start_desc = dict.find(desc);
       pos_start_desc == std::string_view::npos) {
@@ -269,12 +267,15 @@ void cnpypp::parse_zip_footer(std::istream& fs, uint16_t& nrecs,
 }
 
 cnpypp::NpyArray load_the_npy_file(std::istream& fs) {
-  std::vector<size_t> shape;
-  size_t word_size;
+  std::vector<size_t> word_sizes, shape;
+  std::vector<char> data_types;
+  std::vector<std::string> labels;
   cnpypp::MemoryOrder memory_order;
-  cnpypp::parse_npy_header(fs, word_size, shape, memory_order);
 
-  cnpypp::NpyArray arr(shape, word_size, memory_order);
+  cnpypp::parse_npy_header(fs, word_sizes, data_types, labels, shape,
+                           memory_order);
+
+  cnpypp::NpyArray arr(shape, word_sizes.at(0), memory_order);
   fs.read(arr.data<char>(), arr.num_bytes());
   return arr;
 }
