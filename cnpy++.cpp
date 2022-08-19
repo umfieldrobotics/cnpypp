@@ -275,7 +275,8 @@ cnpypp::NpyArray load_the_npy_file(std::istream& fs) {
   cnpypp::parse_npy_header(fs, word_sizes, data_types, labels, shape,
                            memory_order);
 
-  cnpypp::NpyArray arr(shape, word_sizes.at(0), memory_order);
+  cnpypp::NpyArray arr{std::move(shape), std::move(word_sizes),
+                       std::move(labels), memory_order};
   fs.read(arr.data<char>(), arr.num_bytes());
   return arr;
 }
@@ -310,7 +311,8 @@ cnpypp::NpyArray load_the_npz_array(std::istream& fs, uint32_t compr_bytes,
   cnpypp::MemoryOrder memory_order;
   cnpypp::parse_npy_header(&buffer_uncompr[0], word_size, shape, memory_order);
 
-  cnpypp::NpyArray array(shape, word_size, memory_order);
+  cnpypp::NpyArray array(shape, std::vector<size_t>{1, word_size},
+                         std::vector<std::string>{}, memory_order);
 
   size_t offset = uncompr_bytes - array.num_bytes();
   memcpy(array.data<unsigned char>(), &buffer_uncompr[0] + offset,
@@ -721,16 +723,16 @@ size_t const* cnpypp_npyarray_get_shape(cnpypp_npyarray_handle const* npyarr,
   auto const& array = *reinterpret_cast<cnpypp::NpyArray const*>(npyarr);
 
   if (rank != nullptr) {
-    *rank = array.shape.size();
+    *rank = array.getShape().size();
   }
 
-  return array.shape.data();
+  return array.getShape().data();
 }
 
 enum cnpypp_memory_order
 cnpypp_npyarray_get_memory_order(cnpypp_npyarray_handle const* npyarr) {
   auto const& array = *reinterpret_cast<cnpypp::NpyArray const*>(npyarr);
-  return (array.memory_order == cnpypp::MemoryOrder::Fortran)
+  return (array.getMemoryOrder() == cnpypp::MemoryOrder::Fortran)
              ? cnpypp_memory_order_fortran
              : cnpypp_memory_order_c;
 }

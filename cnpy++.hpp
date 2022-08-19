@@ -41,45 +41,40 @@ enum class MemoryOrder {
 };
 
 struct NpyArray {
-  NpyArray(std::vector<size_t> _shape, size_t _word_size,
-           MemoryOrder _memory_order, std::unique_ptr<std::byte[]>&& _buffer,
-           size_t _buffer_length)
-      : shape{std::move(_shape)}, word_size{_word_size},
+  NpyArray(NpyArray&& other)
+      : shape{std::move(other.shape)}, word_sizes{std::move(other.word_sizes)},
+        memory_order{other.memory_order}, num_vals{other.num_vals},
+        total_value_size{other.total_value_size}, buffer{std::move(
+                                                      other.buffer)} {}
+
+  NpyArray(std::vector<size_t> _shape, std::vector<size_t> _word_sizes,
+           std::vector<std::string> _labels, MemoryOrder _memory_order)
+      : shape{std::move(_shape)},
+        word_sizes{std::move(_word_sizes)}, labels{std::move(_labels)},
         memory_order{_memory_order}, num_vals{std::accumulate(
                                          shape.begin(), shape.end(), size_t{1},
                                          std::multiplies<size_t>())},
-        offset{_buffer_length - num_vals * _word_size}, buffer{std::move(
-                                                            _buffer)} {}
-
-  NpyArray(NpyArray&& other)
-      : shape{std::move(other.shape)}, word_size{other.word_size},
-        memory_order{other.memory_order}, num_vals{other.num_vals},
-        offset{other.offset}, buffer{std::move(other.buffer)} {}
-
-  NpyArray(std::vector<size_t> const& _shape, size_t _word_size,
-           MemoryOrder _memory_order)
-      : NpyArray{_shape, _word_size, _memory_order,
-                 std::make_unique<std::byte[]>(
-                     std::accumulate(_shape.begin(), _shape.end(), _word_size,
-                                     std::multiplies<size_t>())),
-                 std::accumulate(_shape.begin(), _shape.end(), _word_size,
-                                 std::multiplies<size_t>())} {}
+        total_value_size{std::accumulate(word_sizes.begin(), word_sizes.end(),
+                                         size_t{1}, std::multiplies<size_t>())},
+        buffer{std::make_unique<std::byte[]>(total_value_size * num_vals)} {
+    construct();
+  }
 
   NpyArray(NpyArray const&) = delete;
 
   template <typename T> T* data() {
-    return reinterpret_cast<T*>(&(buffer.get() + offset)[0]);
+    return reinterpret_cast<T*>(buffer.get());
   }
 
   template <typename T> const T* data() const {
-    return reinterpret_cast<T const*>(&(buffer.get() + offset)[0]);
+    return reinterpret_cast<T const*>(buffer.get());
   }
 
-  size_t num_bytes() const { return num_vals * word_size; }
+  size_t num_bytes() const { return num_vals * total_value_size; }
 
   bool compare_metadata(NpyArray const& other) const {
-    return shape == other.shape && word_size == other.word_size &&
-           memory_order == other.memory_order;
+    return shape == other.shape && word_sizes == other.word_sizes &&
+           labels == other.labels && memory_order == other.memory_order;
   }
 
   bool operator==(NpyArray const& other) const {
@@ -95,13 +90,21 @@ struct NpyArray {
 
   template <typename T> T const* cend() const { return data<T>() + num_vals; }
 
-  std::vector<size_t> const shape;
-  size_t const word_size;
-  MemoryOrder const memory_order;
-  size_t const num_vals;
-  size_t const offset;
+  std::vector<size_t> const& getShape() const { return shape; }
+  std::vector<std::string> const& getLabels() const { return labels; }
+  std::vector<size_t> const& getWordSizes() const { return word_sizes; }
+  MemoryOrder getMemoryOrder() const { return memory_order; }
 
 private:
+  static void construct() {}
+
+  std::vector<size_t> const shape;
+  std::vector<size_t> const word_sizes;
+  std::vector<std::string> const labels;
+  MemoryOrder const memory_order;
+  size_t const num_vals;
+  size_t const total_value_size;
+
   std::unique_ptr<std::byte[]> buffer;
 };
 

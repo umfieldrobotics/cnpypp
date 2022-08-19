@@ -39,13 +39,12 @@ int main() {
     auto const* const loaded_data = arr.data<uint32_t>();
 
     // make sure the loaded data matches the saved data
-    if (!(arr.word_size == sizeof(decltype(data)::value_type))) {
+    if (!(arr.getWordSizes().at(0) == sizeof(decltype(data)::value_type))) {
       std::cerr << "error in line " << __LINE__ << std::endl;
       return EXIT_FAILURE;
     }
 
-    if (arr.shape.size() != shape.size() ||
-        !std::equal(shape.cbegin(), shape.cend(), arr.shape.cbegin())) {
+    if (arr.getShape() != shape) {
       std::cerr << "error in line " << __LINE__ << std::endl;
       return EXIT_FAILURE;
     }
@@ -65,7 +64,7 @@ int main() {
     auto const* const loaded_data = arr.data<uint32_t>();
 
     // make sure the loaded data matches the saved data
-    if (!(arr.word_size == sizeof(decltype(data)::value_type))) {
+    if (!(arr.getWordSizes().at(0) == sizeof(decltype(data)::value_type))) {
       std::cerr << "error in line " << __LINE__ << std::endl;
       return EXIT_FAILURE;
     }
@@ -82,8 +81,8 @@ int main() {
       return data;
     });
 
-    if (arr.shape.size() != shape.size() ||
-        !std::equal(new_shape.cbegin(), new_shape.cend(), arr.shape.cbegin())) {
+    if (!std::equal(new_shape.begin(), new_shape.end(),
+                    arr.getShape().begin())) {
       std::cerr << "error in line " << __LINE__ << std::endl;
       return EXIT_FAILURE;
     }
@@ -107,12 +106,12 @@ int main() {
     auto const* const loaded_data = arr.data<char>();
 
     // make sure the loaded data matches the saved data
-    if (!(arr.word_size == sizeof(decltype(str1)::value_type))) {
+    if (!(arr.getWordSizes().at(0) == sizeof(decltype(str1)::value_type))) {
       std::cerr << "error in line " << __LINE__ << std::endl;
       return EXIT_FAILURE;
     }
 
-    if (arr.shape.size() != 1 || arr.shape.at(0) != str1.size()) {
+    if (arr.getShape().size() != 1 || arr.getShape().at(0) != str1.size()) {
       std::cerr << "error in line " << __LINE__ << std::endl;
       return EXIT_FAILURE;
     }
@@ -132,14 +131,13 @@ int main() {
     auto const* const loaded_data = arr.data<char>();
 
     // make sure the loaded data matches the saved data
-    if (!(arr.word_size == sizeof(decltype(str2)::value_type))) {
+    if (!(arr.getWordSizes().at(0) == sizeof(decltype(str2)::value_type))) {
       std::cerr << "error in line " << __LINE__ << std::endl;
       return EXIT_FAILURE;
     }
 
-    if (arr.shape.size() != 1 || arr.shape.at(0) != str2.size()) {
+    if (arr.getShape().size() != 1 || arr.getShape().at(0) != str2.size()) {
       std::cerr << "error in line " << __LINE__ << std::endl;
-      std::cerr << arr.shape.size() << '\n';
       return EXIT_FAILURE;
     }
 
@@ -167,12 +165,12 @@ int main() {
       char const* const loaded_str = arr.data<char>();
 
       // make sure the loaded data matches the saved data
-      if (!(arr.word_size == sizeof(decltype(str1)::value_type))) {
+      if (!(arr.getWordSizes().at(0) == sizeof(decltype(str1)::value_type))) {
         std::cerr << "error in line " << __LINE__ << std::endl;
         return EXIT_FAILURE;
       }
 
-      if (arr.shape.size() != 1 || arr.shape.at(0) != str1.size()) {
+      if (arr.getShape().size() != 1 || arr.getShape().at(0) != str1.size()) {
         std::cerr << "error in line " << __LINE__ << std::endl;
         return EXIT_FAILURE;
       }
@@ -189,14 +187,13 @@ int main() {
       float const* const loaded_arr_f = arr2.data<float>();
 
       // make sure the loaded data matches the saved data
-      if (arr.word_size != sizeof(uint32_t) ||
-          arr2.word_size != sizeof(float)) {
+      if (arr.getWordSizes().at(0) != sizeof(uint32_t) ||
+          arr2.getWordSizes().at(0) != sizeof(float)) {
         std::cerr << "error in line " << __LINE__ << std::endl;
         return EXIT_FAILURE;
       }
 
-      if (!std::equal(arr.shape.cbegin(), arr.shape.cend(), shape.cbegin()) ||
-          !std::equal(arr2.shape.cbegin(), arr2.shape.cend(), shape.cbegin())) {
+      if (arr.getShape() != shape || arr2.getShape() != shape) {
         std::cerr << "error in line " << __LINE__ << std::endl;
         return EXIT_FAILURE;
       }
