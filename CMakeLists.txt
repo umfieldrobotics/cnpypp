@@ -37,7 +37,7 @@ endif()
 
 
 install(TARGETS "cnpy++" LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
-install(FILES "cnpy++.hpp" "cnpy++.h" DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+install(FILES "tuple_util.hpp" "cnpy++.hpp" "cnpy++.h" DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
 add_executable(example1 example1.cpp)
 target_link_libraries(example1 cnpy++)
@@ -64,6 +64,12 @@ set_property(TARGET range_zip_example PROPERTY CXX_EXTENSIONS OFF)
 
 
 add_executable(test test.cpp)
-target_link_libraries(test cnpy++)
+target_link_libraries(test PRIVATE cnpy++)
 target_compile_features(test PRIVATE cxx_std_17)
 set_property(TARGET test PROPERTY CXX_EXTENSIONS OFF)
+
+add_executable(tuple_ex tuple_ex.cpp)
+target_link_libraries(tuple_ex PRIVATE cnpy++)
+target_compile_features(tuple_ex PRIVATE cxx_std_17)
+set_property(TARGET tuple_ex PROPERTY CXX_EXTENSIONS OFF)
+target_include_directories(tuple_ex PRIVATE ${Boost_INCLUDE_DIR})
