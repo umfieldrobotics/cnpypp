@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdlib>
 #include <functional>
+#include <iomanip>
 #include <iostream>
 #include <list>
 #include <map>
@@ -11,6 +12,7 @@
 #include <string_view>
 
 #include <boost/iterator/zip_iterator.hpp>
+#include <boost/type_index.hpp>
 
 #include "cnpy++.hpp"
 
@@ -219,6 +221,14 @@ int main() {
 
     cnpypp::npy_save("structured.npy", {"a", "b", "c"}, tupleVec.begin(),
                      {tupleVec.size()});
+
+    cnpypp::NpyArray arr = cnpypp::npy_load("structured.npy");
+    auto r = arr.make_tuple_range<int32_t, int8_t, int16_t>();
+
+    if (!std::equal(tupleVec.begin(), tupleVec.end(), r.begin())) {
+      std::cerr << "error in line " << __LINE__ << std::endl;
+      return EXIT_FAILURE;
+    }
   }
 
   // std::array written as structured type
@@ -229,6 +239,17 @@ int main() {
 
     cnpypp::npy_save("structured2.npy", {"a", "b"}, arrVec.begin(),
                      {arrVec.size()});
+
+    cnpypp::NpyArray arr = cnpypp::npy_load("structured2.npy");
+    auto r = arr.make_tuple_range<int8_t, int8_t>();
+
+    if (!std::equal(arrVec.begin(), arrVec.end(), r.begin(),
+                    [](auto const& a, auto const& b) {
+                      return a[0] == std::get<0>(b) && a[1] == std::get<1>(b);
+                    })) {
+      std::cerr << "error in line " << __LINE__ << std::endl;
+      return EXIT_FAILURE;
+    }
   }
 
   return EXIT_SUCCESS;
