@@ -213,7 +213,6 @@ void cnpypp::parse_npy_header(std::istream& fs, std::vector<size_t>& word_sizes,
 
         for (std::cregex_iterator it = tuples_begin; it != tuples_end; ++it) {
           auto&& match = *it;
-          std::cout << match.str() << std::endl;
           labels.emplace_back(match[1].str());
 
           if (match[2].str() == ">") {
