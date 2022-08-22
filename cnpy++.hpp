@@ -9,7 +9,6 @@
 #include <array>
 #include <cassert>
 #include <climits>
-#include <complex>
 #include <cstring>
 #include <fstream>
 #include <iostream>
@@ -30,6 +29,7 @@
 #include <zlib.h>
 
 #include <cnpy++.h>
+#include <map_type.hpp>
 #include <tuple_util.hpp>
 
 namespace cnpypp {
@@ -109,26 +109,8 @@ private:
 
 using npz_t = std::map<std::string, NpyArray>;
 
-template <typename F> char constexpr map_type(std::complex<F>) { return 'c'; }
-
-template <typename T> char constexpr map_type(T) {
-  static_assert(std::is_arithmetic_v<T>, "only arithmetic types supported");
-
-  // bool not supported at the moment (-> std::vector<bool> issues etc.)
-  /*if constexpr (std::is_same_v<T, bool>) {
-    return 'b';
-  }*/
-
-  if constexpr (std::is_integral_v<T>) {
-    return std::is_signed_v<T> ? 'i' : 'u';
-  }
-
-  if constexpr (std::is_floating_point_v<T>) {
-    return 'f';
-  }
-}
-
 char BigEndianTest();
+
 bool _exists(std::string const&); // calls boost::filesystem::exists()
 
 std::vector<char> create_npy_header(gsl::span<size_t const> shape, char dtype,

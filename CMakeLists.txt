@@ -32,12 +32,12 @@ target_link_libraries(cnpy++ PUBLIC GSL)
 if(MSVC)
   target_compile_options(cnpy++ PRIVATE /W4 /WX)
 else()
-  target_compile_options(cnpy++ PRIVATE -Wall -Wextra -pedantic -Wfatal-errors)
+  target_compile_options(cnpy++ PRIVATE -Wall -Wextra -pedantic) #  -Wfatal-errors
 endif()
 
 
 install(TARGETS "cnpy++" LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
-install(FILES "tuple_util.hpp" "cnpy++.hpp" "cnpy++.h" DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+install(FILES "tuple_util.hpp" "map_type.hpp" "cnpy++.hpp" "cnpy++.h" DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
 add_executable(example1 example1.cpp)
 target_link_libraries(example1 cnpy++)
