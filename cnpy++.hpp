@@ -56,10 +56,8 @@ struct NpyArray {
                                          shape.begin(), shape.end(), size_t{1},
                                          std::multiplies<size_t>())},
         total_value_size{std::accumulate(word_sizes.begin(), word_sizes.end(),
-                                         size_t{1}, std::multiplies<size_t>())},
-        buffer{std::make_unique<std::byte[]>(total_value_size * num_vals)} {
-    construct();
-  }
+                                         size_t{0}, std::plus<size_t>())},
+        buffer{std::make_unique<std::byte[]>(total_value_size * num_vals)} {}
 
   NpyArray(NpyArray const&) = delete;
 
@@ -89,14 +87,23 @@ struct NpyArray {
 
   template <typename T> T const* cend() const { return data<T>() + num_vals; }
 
+  template <typename... TArgs>
+  tuple_range<std::tuple<TArgs...>> make_tuple_range() {
+    if (sizeof...(TArgs) != word_sizes.size()) {
+      throw std::runtime_error(
+          "make_tuple_range: number of type arguments does not match data");
+    } else {
+      return tuple_range<std::tuple<TArgs...>>{
+          buffer.get(), buffer.get() + num_vals * total_value_size};
+    }
+  }
+
   std::vector<size_t> const& getShape() const { return shape; }
   std::vector<std::string> const& getLabels() const { return labels; }
   std::vector<size_t> const& getWordSizes() const { return word_sizes; }
   MemoryOrder getMemoryOrder() const { return memory_order; }
 
 private:
-  static void construct() {}
-
   std::vector<size_t> const shape;
   std::vector<size_t> const word_sizes;
   std::vector<std::string> const labels;

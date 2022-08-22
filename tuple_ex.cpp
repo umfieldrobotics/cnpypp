@@ -5,50 +5,68 @@
 #include <iostream>
 #include <tuple>
 
+#include <iomanip>
+#include <iostream>
+
+#include <cnpy++.hpp>
 #include <tuple_util.hpp>
 
-using tuple_t = std::pair<float, uint32_t>;
+#include <boost/type_index.hpp>
+
+using tuple_t = std::tuple<uint16_t, float>;
 
 int main() {
-  //~ std::cout << offsetof(tuple_t, first) << " " << offsetof(tuple_t, second)
-  //<< std::endl;
+  std::array<std::byte, cnpypp::tuple_info<tuple_t>::sum_sizes * 6> arr{};
 
-  std::array<std::byte, 8 * 20> arr;
-
-  for (int i = 0; i < 20; ++i) {
-    auto* ptr = &arr[8 * i];
-    float* f = reinterpret_cast<float*>(ptr + offsetof(tuple_t, first));
-    uint32_t* u = reinterpret_cast<uint32_t*>(ptr + offsetof(tuple_t, second));
+  for (int i = 0; i < 6; ++i) {
+    auto* ptr = &arr[cnpypp::tuple_info<tuple_t>::sum_sizes * i];
+    auto* u = reinterpret_cast<uint16_t*>(
+        ptr + cnpypp::tuple_info<tuple_t>::offsets[0]);
+    auto* f =
+        reinterpret_cast<float*>(ptr + cnpypp::tuple_info<tuple_t>::offsets[1]);
 
     *f = float(M_PI) * i;
     *u = i;
   }
 
-  std::cout << reinterpret_cast<tuple_t*>(&arr[0])->first << "\t"
-            << reinterpret_cast<tuple_t*>(&arr[0])->second << std::endl;
-  std::cout << reinterpret_cast<tuple_t*>(&arr[8])->first << "\t"
-            << reinterpret_cast<tuple_t*>(&arr[8])->second << std::endl;
-  std::cout << reinterpret_cast<tuple_t*>(&arr[16])->first << "\t"
-            << reinterpret_cast<tuple_t*>(&arr[16])->second << std::endl;
-  std::cout << reinterpret_cast<tuple_t*>(&arr[24])->first << "\t"
-            << reinterpret_cast<tuple_t*>(&arr[24])->second << std::endl;
+  tuple_t tup;
 
-  std::cout << std::endl;
+  for (auto&& p : cnpypp::tuple_info<tuple_t>::offsets) {
+    std::cout << p << ',' << ' ';
+  }
+
+  std::cout << &tup << " " << &(std::get<0>(tup)) << " " << &(std::get<1>(tup))
+            << std::endl;
+
+  std::cout << &arr[0] << std::endl;
 
   cnpypp::tuple_iterator<tuple_t> it(arr.begin());
-  std::cout << (*it).first << "," << (*it).second << std::endl;
+  std::tuple<uint16_t&, float&> refs = *it;
+  std::tuple<uint16_t const&, float const&> refs2 = *it;
 
-  ++it;
-  std::cout << (*it).first << "," << (*it).second << std::endl;
+  for (cnpypp::tuple_iterator<tuple_t> it{arr.begin()};
+       it != cnpypp::tuple_iterator<tuple_t>{arr.end()}; ++it) {
+    std::cout << std::get<0>(*it) << "\t" << std::get<1>(*it) << std::endl;
+    std::cout << &(std::get<0>(*it)) << "\t" << &(std::get<1>(*it))
+              << std::endl;
+  }
 
-  ++it;
-  std::cout << (*it).first << "," << (*it).second << std::endl;
+  cnpypp::NpyArray npyarr{{6},
+                          {sizeof(uint16_t), sizeof(float)},
+                          {"uint16", "float"},
+                          cnpypp::MemoryOrder::Fortran};
+  std::copy(arr.cbegin(), arr.cend(), npyarr.begin<std::byte>());
 
-  cnpypp::tuple_iterator<tuple_t> const it2(arr.begin());
-  auto const it3 = it2;
+  std::cout << npyarr.cbegin<std::byte>() << " " << npyarr.cend<std::byte>()
+            << std::endl;
 
-  std::cout << std::distance(it2, it) << std::endl;
-  std::cout << std::distance(it, it2) << std::endl;
-  std::cout << std::distance(it2, it3) << std::endl;
-  std::cout << (*it2).first << "," << (*it2).second << std::endl;
+  auto r = npyarr.make_tuple_range<uint16_t, float>();
+  std::cout << r.begin().ptr_ << " " << r.end().ptr_ << std::endl;
+  std::cout << &(std::get<0>(*(r.begin()))) << " " << &(std::get<0>(*(r.end())))
+            << std::endl;
+  std::cout << "=== range-based for ===" << std::endl;
+  for (auto&& t : r) {
+    std::cout << &(std::get<0>(t)) << ":\t" << std::get<0>(t) << '\t'
+              << std::get<1>(t) << '\n';
+  }
 }

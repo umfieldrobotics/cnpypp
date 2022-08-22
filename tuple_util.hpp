@@ -13,6 +13,8 @@
 
 #include <boost/iterator/iterator_facade.hpp>
 
+#include <map_type.hpp>
+
 namespace cnpypp {
 
 namespace detail {
@@ -120,13 +122,55 @@ private:
   }
 };
 
+template <typename T> struct add_const {};
+
+template <typename... Types> struct add_const<std::tuple<Types...>> {
+  using type = std::tuple<typename std::add_const<Types>::type...>;
+};
+
+template <typename Tup> using add_const_t = typename add_const<Tup>::type;
+
+template <typename T> struct add_ptr {};
+
+template <typename... Types> struct add_ptr<std::tuple<Types...>> {
+  using type = std::tuple<typename std::add_pointer<Types>::type...>;
+};
+
+template <typename Tup> using add_ptr_t = typename add_ptr<Tup>::type;
+
+template <typename T> struct add_ref {};
+
+template <typename... Types> struct add_ref<std::tuple<Types...>> {
+  using type = std::tuple<typename std::add_lvalue_reference<Types>::type...>;
+};
+
+template <typename Tup> using add_ref_t = typename add_ref<Tup>::type;
+
+namespace detail {
+template <typename T> auto dereference_impl(T* ptr) {
+  return std::tuple<std::add_lvalue_reference_t<T>>{*ptr};
+}
+
+template <typename T, typename... Tother>
+auto dereference_impl(T* ptr, Tother... others) {
+  return std::tuple_cat(std::tuple<std::add_lvalue_reference_t<T>>(*ptr),
+                        dereference_impl(others...));
+}
+
+} // namespace detail
+
 template <typename Tup>
 class tuple_iterator
     : public boost::iterator_facade<tuple_iterator<Tup>, Tup,
-                                    std::random_access_iterator_tag, Tup,
-                                    std::ptrdiff_t> {
+                                    std::random_access_iterator_tag,
+                                    add_ref_t<Tup>, std::ptrdiff_t> {
 public:
-  tuple_iterator(std::byte const* ptr) : ptr_{ptr} {}
+  using ref_tuple_t = add_ref_t<Tup>;
+  using pointer_tuple_t = add_ptr_t<Tup>;
+  using const_ref_tuple_t = add_ref_t<add_const_t<Tup>>;
+  using const_pointer_tuple_t = add_ptr_t<add_const_t<Tup>>;
+
+  tuple_iterator(std::byte* ptr) : ptr_{ptr} {}
 
 private:
   friend class boost::iterator_core_access;
@@ -141,12 +185,12 @@ private:
     return (other.ptr_ - ptr_) / tuple_info<Tup>::sum_sizes;
   }
 
-  template <int k> void unpack(Tup& tup) const {
+  template <int k> void unpack(pointer_tuple_t& ptrTup) const {
     if constexpr (k < tuple_info<Tup>::size) {
-      auto& ref = std::get<k>(tup);
-      ref = *reinterpret_cast<std::tuple_element_t<k, Tup> const*>(
+      auto& ref = std::get<k>(ptrTup);
+      ref = reinterpret_cast<std::tuple_element_t<k, Tup>*>(
           ptr_ + tuple_info<Tup>::offsets[k]);
-      unpack<k + 1>(tup);
+      unpack<k + 1>(ptrTup);
     }
   }
 
@@ -154,16 +198,31 @@ private:
     return ptr_ == other.ptr_;
   }
 
-  Tup dereference() const {
-    Tup retval{};
+  ref_tuple_t dereference() const {
+    pointer_tuple_t element_addresses{};
 
-    unpack<0>(retval);
+    unpack<0>(element_addresses);
 
-    return retval;
+    return std::apply(
+        [](auto... args) { return detail::dereference_impl(args...); },
+        element_addresses);
   }
 
+public:
+  std::byte* ptr_; //!< pointer to first byte of packed sequence
+};
+
+template <typename Tup> class tuple_range {
+public:
+  tuple_range(std::byte* beg, std::byte* end) : beg_{beg}, end_{end} {}
+
+  tuple_iterator<Tup> begin() const { return tuple_iterator<Tup>{beg_}; }
+
+  tuple_iterator<Tup> end() const { return tuple_iterator<Tup>{end_}; }
+
 private:
-  std::byte const* ptr_;
+  std::byte* const beg_;
+  std::byte* const end_;
 };
 
 } // namespace cnpypp
