@@ -1,0 +1,169 @@
+// Copyright (C) 2022 Maximilian Reininghaus
+// Released under MIT License
+// license available in LICENSE file, or at
+// http://www.opensource.org/licenses/mit-license.php
+
+#pragma once
+
+#include <array>
+#include <cstddef>
+#include <iterator>
+#include <tuple>
+#include <utility>
+
+#include <boost/iterator/iterator_facade.hpp>
+
+namespace cnpypp {
+
+namespace detail {
+template <template <typename...> class Template, typename T>
+struct is_specialization_of : std::false_type {};
+
+template <template <typename...> class Template, typename... Args>
+struct is_specialization_of<Template, Template<Args...>> : std::true_type {};
+
+template <template <typename...> class Template, typename... Args>
+bool constexpr is_specialization_of_v =
+    is_specialization_of<Template, Args...>::value;
+
+template <class T> struct is_std_array : std::false_type {};
+
+template <class T, std::size_t N>
+struct is_std_array<std::array<T, N>> : std::true_type {};
+
+template <typename T> bool constexpr is_std_array_v = is_std_array<T>::value;
+
+template <typename T>
+bool constexpr is_tuple_like_v =
+    is_std_array_v<T> || is_specialization_of_v<std::pair, T> ||
+    is_specialization_of_v<std::tuple, T>;
+} // namespace detail
+
+template <typename Tup> struct tuple_info {
+  static_assert(detail::is_specialization_of_v<std::tuple, Tup> ||
+                    detail::is_specialization_of_v<std::pair, Tup> ||
+                    detail::is_std_array_v<Tup>,
+                "must provide std::tuple-like type");
+
+  static auto constexpr size = std::tuple_size_v<Tup>;
+
+  // prevent any instantiation
+  tuple_info() = delete;
+  tuple_info(tuple_info<Tup> const&) = delete;
+  tuple_info& operator=(tuple_info const&) = delete;
+
+private:
+  static std::array<char, size> constexpr getDataTypes() {
+    std::array<char, size> types{};
+    getDataTypes_impl<0>(types);
+    return types;
+  }
+
+  static std::array<size_t, size> constexpr getElementSizes() {
+    std::array<size_t, size> sizes{};
+    getSizes_impl<0>(sizes);
+    return sizes;
+  }
+
+public:
+  static std::array<char, size> constexpr data_types = getDataTypes();
+  static std::array<size_t, size> constexpr element_sizes = getElementSizes();
+
+private:
+  static size_t constexpr sum_size_impl() {
+    size_t sum{};
+
+    for (auto const& v : element_sizes) {
+      sum += v;
+    }
+
+    return sum;
+  }
+
+public:
+  static size_t constexpr sum_sizes = sum_size_impl();
+
+private:
+  static std::array<size_t, size> constexpr calc_offsets() {
+    std::array<size_t, size> offsets{};
+    offsets[0] = 0;
+    calc_offsets_impl<1>(offsets);
+    return offsets;
+  }
+
+public:
+  static std::array<size_t, size> constexpr offsets = calc_offsets();
+
+private:
+  template <int k>
+  static void constexpr getDataTypes_impl(std::array<char, size>& sizes) {
+    if constexpr (k < size) {
+      sizes[k] = map_type(std::tuple_element_t<k, Tup>{});
+      getDataTypes_impl<k + 1>(sizes);
+    }
+  }
+
+  template <int k>
+  static void constexpr getSizes_impl(std::array<size_t, size>& sizes) {
+    if constexpr (k < size) {
+      sizes[k] = sizeof(std::tuple_element_t<k, Tup>);
+      getSizes_impl<k + 1>(sizes);
+    }
+  }
+
+  template <int k>
+  static void constexpr calc_offsets_impl(std::array<size_t, size>& offsets) {
+    if constexpr (k < size) {
+      offsets[k] = offsets[k - 1] + element_sizes[k - 1];
+      calc_offsets_impl<k + 1>(offsets);
+    }
+  }
+};
+
+template <typename Tup>
+class tuple_iterator
+    : public boost::iterator_facade<tuple_iterator<Tup>, Tup,
+                                    std::random_access_iterator_tag, Tup,
+                                    std::ptrdiff_t> {
+public:
+  tuple_iterator(std::byte const* ptr) : ptr_{ptr} {}
+
+private:
+  friend class boost::iterator_core_access;
+
+  void increment() { ptr_ += tuple_info<Tup>::sum_sizes; }
+
+  void decrement() { ptr_ -= tuple_info<Tup>::sum_sizes; }
+
+  void advance(size_t n) { ptr_ += n * tuple_info<Tup>::sum_sizes; }
+
+  std::ptrdiff_t distance_to(tuple_iterator const& other) const {
+    return (other.ptr_ - ptr_) / tuple_info<Tup>::sum_sizes;
+  }
+
+  template <int k> void unpack(Tup& tup) const {
+    if constexpr (k < tuple_info<Tup>::size) {
+      auto& ref = std::get<k>(tup);
+      ref = *reinterpret_cast<std::tuple_element_t<k, Tup> const*>(
+          ptr_ + tuple_info<Tup>::offsets[k]);
+      unpack<k + 1>(tup);
+    }
+  }
+
+  bool equal(tuple_iterator<Tup> const& other) const {
+    return ptr_ == other.ptr_;
+  }
+
+  Tup dereference() const {
+    Tup retval{};
+
+    unpack<0>(retval);
+
+    return retval;
+  }
+
+private:
+  std::byte const* ptr_;
+};
+
+} // namespace cnpypp
