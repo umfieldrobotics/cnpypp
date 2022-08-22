@@ -558,8 +558,8 @@ void npy_save(std::string const& fname,
       throw std::runtime_error{ss.str().c_str()};
     }
 
-    if (!std::equal(std::next(shape.begin()), shape.end(),
-                    std::next(true_data_shape.begin()))) {
+    if (shape.size() > 0 && !std::equal(std::next(shape.begin()), shape.end(),
+                                        std::next(true_data_shape.begin()))) {
       std::stringstream ss;
       ss << "libnpy error: npy_save attempting to append misshaped data to "
          << fname;
