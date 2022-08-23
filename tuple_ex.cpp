@@ -69,4 +69,23 @@ int main() {
     std::cout << &(std::get<0>(t)) << ":\t" << std::get<0>(t) << '\t'
               << std::get<1>(t) << '\n';
   }
+
+  std::cout << "=== stride_iterator for ===" << std::endl;
+  cnpypp::stride_iterator<float> sit{
+      npyarr.begin<std::byte>() + cnpypp::tuple_info<tuple_t>::offsets[1],
+      cnpypp::tuple_info<tuple_t>::sum_sizes};
+  for (int i = 0; i < 6; ++i) {
+    std::cout << '[' << i << "] = " << *sit << std::endl;
+    ++sit;
+  }
+
+  std::cout << "=== column range float ===" << std::endl;
+  for (auto&& v : npyarr.column_range<float>("float")) {
+    std::cout << v << std::endl;
+  }
+
+  std::cout << "=== column range uint16 ===" << std::endl;
+  for (auto&& v : npyarr.column_range<uint16_t>("uint16")) {
+    std::cout << v << std::endl;
+  }
 }

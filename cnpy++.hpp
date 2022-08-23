@@ -11,7 +11,7 @@
 #include <climits>
 #include <cstring>
 #include <fstream>
-#include <iostream>
+#include <iomanip>
 #include <iterator>
 #include <map>
 #include <memory>
@@ -30,6 +30,7 @@
 
 #include <cnpy++.h>
 #include <map_type.hpp>
+#include <stride_iterator.hpp>
 #include <tuple_util.hpp>
 
 namespace cnpypp {
@@ -88,13 +89,43 @@ struct NpyArray {
   template <typename T> T const* cend() const { return data<T>() + num_vals; }
 
   template <typename... TArgs>
-  tuple_range<std::tuple<TArgs...>> make_tuple_range() {
+  subrange<tuple_iterator<std::tuple<TArgs...>>> make_tuple_range() const {
     if (sizeof...(TArgs) != word_sizes.size()) {
       throw std::runtime_error(
           "make_tuple_range: number of type arguments does not match data");
     } else {
-      return tuple_range<std::tuple<TArgs...>>{
-          buffer.get(), buffer.get() + num_vals * total_value_size};
+      return subrange{tuple_iterator<std::tuple<TArgs...>>{buffer.get()},
+                      tuple_iterator<std::tuple<TArgs...>>{
+                          buffer.get() + num_vals * total_value_size}};
+    }
+  }
+
+  template <typename TValueType>
+  subrange<stride_iterator<TValueType>>
+  column_range(std::string_view name) const {
+    if (auto it = std::find(labels.cbegin(), labels.cend(), name);
+        it == labels.cend()) {
+      std::stringstream ss;
+      ss << "column_range: " << std::quoted(name) << " not found in labels";
+      throw std::runtime_error{ss.str().c_str()};
+    } else {
+      std::ptrdiff_t const d = std::distance(labels.cbegin(), it);
+
+      if (word_sizes.at(d) != sizeof(TValueType)) {
+        throw std::runtime_error{
+            "column_range: word sizes of requested type and data do not match"};
+      }
+
+      ptrdiff_t const offset =
+          std::accumulate(word_sizes.cbegin(),
+                          std::next(word_sizes.cbegin(), d), std::ptrdiff_t{0});
+
+      auto beg =
+          stride_iterator<TValueType>{buffer.get() + offset, total_value_size};
+      auto end = stride_iterator<TValueType>{buffer.get() + offset +
+                                                 total_value_size * num_vals,
+                                             total_value_size};
+      return subrange{beg, end};
     }
   }
 
@@ -304,7 +335,7 @@ void npy_save(std::string const& fname, TConstInputIterator start,
                     std::next(true_data_shape.begin()))) {
       std::stringstream ss;
       ss << "libnpy error: npy_save attempting to append misshaped data to "
-         << fname;
+         << std::quoted(fname);
       throw std::runtime_error{ss.str().c_str()};
     }
 
@@ -543,7 +574,7 @@ void npy_save(std::string const& fname,
       std::stringstream ss;
       std::cerr << "libnpy error: npy_save attempting to append misdimensioned "
                    "data to "
-                << fname;
+                << std::quoted(fname);
       throw std::runtime_error{ss.str().c_str()};
     }
 
@@ -551,7 +582,7 @@ void npy_save(std::string const& fname,
                                         std::next(true_data_shape.begin()))) {
       std::stringstream ss;
       ss << "libnpy error: npy_save attempting to append misshaped data to "
-         << fname;
+         << std::quoted(fname);
       throw std::runtime_error{ss.str().c_str()};
     }
 
