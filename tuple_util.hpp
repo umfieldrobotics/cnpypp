@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <iterator>
 #include <tuple>
+#include <type_traits>
 #include <utility>
 
 #include <boost/iterator/iterator_facade.hpp>
@@ -185,7 +186,7 @@ private:
     return (other.ptr_ - ptr_) / tuple_info<Tup>::sum_sizes;
   }
 
-  template <int k> void unpack(pointer_tuple_t& ptrTup) const {
+  template <int k> void constexpr unpack(pointer_tuple_t& ptrTup) const {
     if constexpr (k < tuple_info<Tup>::size) {
       auto& ref = std::get<k>(ptrTup);
       ref = reinterpret_cast<std::tuple_element_t<k, Tup>*>(
@@ -210,19 +211,6 @@ private:
 
 public:
   std::byte* ptr_; //!< pointer to first byte of packed sequence
-};
-
-template <typename Tup> class tuple_range {
-public:
-  tuple_range(std::byte* beg, std::byte* end) : beg_{beg}, end_{end} {}
-
-  tuple_iterator<Tup> begin() const { return tuple_iterator<Tup>{beg_}; }
-
-  tuple_iterator<Tup> end() const { return tuple_iterator<Tup>{end_}; }
-
-private:
-  std::byte* const beg_;
-  std::byte* const end_;
 };
 
 } // namespace cnpypp
