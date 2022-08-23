@@ -5,12 +5,10 @@ project(CNPYpp LANGUAGES CXX C)
 include(GNUInstallDirs)
 
 find_package(ZLIB REQUIRED)
-find_package(Boost 1.72 COMPONENTS filesystem REQUIRED)
+find_package(Boost 1.74 COMPONENTS filesystem REQUIRED)
 
 include(FetchContent)
 
-# In this example we are picking a specific tag.
-# You can also pick a specific commit, if you need to.
 FetchContent_Declare(GSL
     GIT_REPOSITORY "https://github.com/microsoft/GSL"
     GIT_TAG "v3.1.0"
@@ -18,9 +16,6 @@ FetchContent_Declare(GSL
 )
 
 FetchContent_MakeAvailable(GSL)
-
-
-# Link against the interface library (IE header only library)
 
 add_library(cnpy++ "cnpy++.cpp" "c_interface.c")
 target_compile_features(cnpy++ PUBLIC cxx_std_17)
@@ -37,7 +32,7 @@ endif()
 
 
 install(TARGETS "cnpy++" LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
-install(FILES "tuple_util.hpp" "map_type.hpp" "cnpy++.hpp" "cnpy++.h" DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+install(FILES "tuple_util.hpp" "stide_iterator" "map_type.hpp" "cnpy++.hpp" "cnpy++.h" DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
 add_executable(example1 example1.cpp)
 target_link_libraries(example1 cnpy++)
