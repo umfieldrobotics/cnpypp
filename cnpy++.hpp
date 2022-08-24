@@ -572,9 +572,9 @@ void npy_save(std::string const& fname,
 
     if (true_data_shape.size() != shape.size()) {
       std::stringstream ss;
-      std::cerr << "libnpy error: npy_save attempting to append misdimensioned "
-                   "data to "
-                << std::quoted(fname);
+      ss << "libnpy error: npy_save attempting to append misdimensioned "
+            "data to "
+         << std::quoted(fname);
       throw std::runtime_error{ss.str().c_str()};
     }
 
