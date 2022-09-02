@@ -43,59 +43,25 @@ static std::regex const num_regex("[0-9][0-9]*");
 static std::regex const
     dtype_tuple_regex("\\('(\\w+)', '([<>|])([a-zA-z])(\\d+)'\\)");
 
-void cnpypp::parse_npy_header(std::istream::char_type* buffer,
-                              size_t& word_size, std::vector<size_t>& shape,
+void cnpypp::parse_npy_header(std::istream::char_type const* buffer,
+                              std::vector<size_t>& word_sizes,
+                              std::vector<char>& data_types,
+                              std::vector<std::string>& labels,
+                              std::vector<size_t>& shape,
                               cnpypp::MemoryOrder& memory_order) {
-  uint8_t const major_version = *reinterpret_cast<uint8_t*>(buffer + 6);
-  uint8_t const minor_version = *reinterpret_cast<uint8_t*>(buffer + 7);
+  uint8_t const major_version = *reinterpret_cast<uint8_t const*>(buffer + 6);
+  uint8_t const minor_version = *reinterpret_cast<uint8_t const*>(buffer + 7);
   uint16_t const header_len =
       boost::endian::endian_load<boost::uint16_t, 2,
                                  boost::endian::order::little>(
-          (unsigned char*)buffer + 8);
-  std::string header(reinterpret_cast<char*>(buffer + 0x0a), header_len);
+          (unsigned char const*)buffer + 8);
+  gsl::span header{reinterpret_cast<char const*>(buffer + 0x0a), header_len};
 
   if (!(major_version == 1 && minor_version == 0)) {
     throw std::runtime_error("parse_npy_header: version not supported");
   }
 
-  size_t loc1, loc2;
-
-  // fortran order
-  loc1 = header.find("fortran_order") + 16;
-  memory_order =
-      (header.substr(loc1, 4) == "True" ? cnpypp::MemoryOrder::Fortran
-                                        : cnpypp::MemoryOrder::C);
-
-  // shape
-  loc1 = header.find("(");
-  loc2 = header.find(")");
-
-  std::smatch sm;
-  shape.clear();
-
-  std::string str_shape = header.substr(loc1 + 1, loc2 - loc1 - 1);
-  while (std::regex_search(str_shape, sm, num_regex)) {
-    shape.push_back(std::stoi(sm[0].str()));
-    str_shape = sm.suffix().str();
-  }
-
-  // endian, word size, data type
-  // byte order code | stands for not applicable.
-  // not sure when this applies except for byte array
-  loc1 = header.find("descr") + 9;
-  bool const littleEndian = header[loc1] == '<' || header[loc1] == '|';
-
-  if (!littleEndian) {
-    throw std::runtime_error(
-        "parse_npy_header: data stored in big-endian (not supported)");
-  }
-
-  // char type = header[loc1+1];
-  // assert(type == map_type(T));
-
-  std::string str_ws = header.substr(loc1 + 2);
-  loc2 = str_ws.find("'");
-  word_size = atoi(str_ws.substr(0, loc2).c_str());
+  parse_npy_dict(header, word_sizes, data_types, labels, shape, memory_order);
 }
 
 static std::string_view const npy_magic_string = "\x93NUMPY";
@@ -132,13 +98,23 @@ void cnpypp::parse_npy_header(std::istream& fs, std::vector<size_t>& word_sizes,
       std::make_unique<std::istream::char_type[]>(header_len);
   fs.read(header_buffer.get(), header_len);
 
-  if (header_buffer[header_len - 1] != '\n') {
+  parse_npy_dict(gsl::span(header_buffer.get(), header_len), word_sizes,
+                 data_types, labels, shape, memory_order);
+}
+
+void cnpypp::parse_npy_dict(gsl::span<std::istream::char_type const> buffer,
+                            std::vector<size_t>& word_sizes,
+                            std::vector<char>& data_types,
+                            std::vector<std::string>& labels,
+                            std::vector<size_t>& shape,
+                            cnpypp::MemoryOrder& memory_order) {
+  if (buffer.back() != '\n') {
     throw std::runtime_error("invalid header: missing terminating newline");
-  } else if (header_buffer[0] != '{') {
+  } else if (buffer.front() != '{') {
     throw std::runtime_error("invalid header: malformed dictionary");
   }
 
-  std::string_view const dict{header_buffer.get(), header_len};
+  std::string_view const dict{buffer.data(), buffer.size()};
 
   if (std::cmatch matches;
       !std::regex_search(dict.begin(), dict.end(), matches,
@@ -233,7 +209,7 @@ void cnpypp::parse_npy_header(std::istream& fs, std::vector<size_t>& word_sizes,
 void cnpypp::parse_zip_footer(std::istream& fs, uint16_t& nrecs,
                               uint32_t& global_header_size,
                               uint32_t& global_header_offset) {
-  std::vector<uint8_t> footer(22);
+  std::array<uint8_t, 22> footer;
   fs.seekg(-22, std::ios_base::end);
   fs.read(reinterpret_cast<char*>(&footer[0]), sizeof(char) * 22);
 
@@ -283,8 +259,12 @@ cnpypp::NpyArray load_the_npy_file(std::istream& fs) {
 cnpypp::NpyArray load_the_npz_array(std::istream& fs, uint32_t compr_bytes,
                                     uint32_t uncompr_bytes) {
 
-  std::vector<std::istream::char_type> buffer_compr(compr_bytes);
-  std::vector<std::istream::char_type> buffer_uncompr(uncompr_bytes);
+  //  std::vector<std::istream::char_type> buffer_compr(compr_bytes);
+  auto buffer_compr = std::make_unique<std::istream::char_type[]>(compr_bytes);
+  auto buffer_uncompr =
+      std::make_unique<std::istream::char_type[]>(uncompr_bytes);
+
+  //  std::vector<std::istream::char_type> buffer_uncompr(uncompr_bytes);
   fs.read(&buffer_compr[0], compr_bytes);
 
   [[maybe_unused]] int err;
@@ -305,15 +285,17 @@ cnpypp::NpyArray load_the_npz_array(std::istream& fs, uint32_t compr_bytes,
   err = inflate(&d_stream, Z_FINISH);
   err = inflateEnd(&d_stream);
 
-  std::vector<size_t> shape;
-  size_t word_size;
+  std::vector<size_t> shape, word_sizes;
+  std::vector<char> data_types; // filled but not used
+  std::vector<std::string> labels;
   cnpypp::MemoryOrder memory_order;
-  cnpypp::parse_npy_header(&buffer_uncompr[0], word_size, shape, memory_order);
+  cnpypp::parse_npy_header(&buffer_uncompr[0], word_sizes, data_types, labels,
+                           shape, memory_order);
 
-  cnpypp::NpyArray array(shape, std::vector<size_t>{1, word_size},
-                         std::vector<std::string>{}, memory_order);
+  cnpypp::NpyArray array(shape, std::move(word_sizes), std::move(labels),
+                         memory_order);
 
-  size_t offset = uncompr_bytes - array.num_bytes();
+  size_t const offset = uncompr_bytes - array.num_bytes();
   memcpy(array.data<unsigned char>(), &buffer_uncompr[0] + offset,
          array.num_bytes());
 

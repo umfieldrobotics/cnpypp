@@ -166,8 +166,18 @@ void parse_npy_header(std::istream& fs, std::vector<size_t>& word_sizes,
                       std::vector<size_t>& shape,
                       cnpypp::MemoryOrder& memory_order);
 
-void parse_npy_header(std::istream::char_type* buffer, size_t& word_size,
+void parse_npy_header(std::istream::char_type const* buffer,
+                      std::vector<size_t>& word_sizes,
+                      std::vector<char>& data_types,
+                      std::vector<std::string>& labels,
                       std::vector<size_t>& shape, MemoryOrder& memory_order);
+
+void parse_npy_dict(gsl::span<std::istream::char_type const> buffer,
+                    std::vector<size_t>& word_sizes,
+                    std::vector<char>& data_types,
+                    std::vector<std::string>& labels,
+                    std::vector<size_t>& shape,
+                    cnpypp::MemoryOrder& memory_order);
 
 void parse_zip_footer(std::istream& fp, uint16_t& nrecs,
                       uint32_t& global_header_size,
