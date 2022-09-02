@@ -1,4 +1,14 @@
-# Purpose:
+# cnpy++
+
+cnpy++ is a C++17 library that allows to read and write NumPy data files (.npy and .npz).
+It is designed in a way to integrate well into the modern C++ ecosystem and provides features not available
+in any similar C++/npy library.
+
+Additionally, C bindings are provided for a limited, but most useful subset of the C++ functionality.
+
+## Motivation
+
+
 
 NumPy offers the `save` method for easy saving of arrays into .npy and `savez` for zipping multiple .npy arrays together into a .npz file. 
 
@@ -19,13 +29,13 @@ To specify a different directory, add `-DCMAKE_INSTALL_PREFIX=/path/to/install/d
 1. get [cmake](www.cmake.org)
 2. create a build directory, say $HOME/build
 3. cd $HOME/build
-4. cmake /path/to/cnpy
+4. cmake /path/to/cnpy++
 5. make
 6. make install
 
 # Using:
 
-To use, `#include"cnpy.h"` in your source code. Compile the source code mycode.cpp as
+To use, `#include <cnpy++.hpp>"` in your source code. Compile the source code mycode.cpp as
 
 ```bash
 g++ -o mycode mycode.cpp -L/path/to/install/dir -lcnpy -lz --std=c++11
