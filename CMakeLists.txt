@@ -33,7 +33,7 @@ endif()
 
 
 install(TARGETS "cnpy++" LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
-install(FILES "tuple_util.hpp" "stide_iterator" "map_type.hpp" "cnpy++.hpp" "cnpy++.h" DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+install(FILES "tuple_util.hpp" "stride_iterator.hpp" "map_type.hpp" "cnpy++.hpp" "cnpy++.h" DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
 add_executable(example1 "examples/example1.cpp")
 target_link_libraries(example1 cnpy++)
