@@ -10,7 +10,7 @@ Additionally, C bindings are provided for a limited, but most useful subset of t
 NumPy data files are a binary data format for serializing multi-dimenstional, potentially also nested, arrays.
 Due to its simplicity, it is a convenient format for scientific computing to be used not only from within Python. 
 
-## Installation:
+## Installation
 
 The default installation directory is /usr/local.
 To specify a different directory, add `-DCMAKE_INSTALL_PREFIX=/path/to/install/dir` to the cmake invocation in step 4.
@@ -22,7 +22,7 @@ To specify a different directory, add `-DCMAKE_INSTALL_PREFIX=/path/to/install/d
 5. make
 6. make install
 
-## Using:
+## Usage
 
 `cnpy++` consists of a header part, `cnpy++.hpp`, which needs to be included in your source file,
 and a compiled part, which can either be a shared or a static library.
@@ -60,15 +60,12 @@ void npy_save(std::string const& fname, TConstInputIterator start,
               std::string_view mode = "w",
               MemoryOrder memory_order = MemoryOrder::C)
 ```
-This function writes data from an interator `start` into the file indicated by the filename `fname`.
-
+This function writes data from an interator `start` into the file indicated by the filename `fname`.  
 The `shape` tuple describes the dimensions of the array, with the total number of elements given
-by the product of all entries of `shape`.
-
+by the product of all entries of `shape`.  
 The `mode` parameter can be either "w" or "a". With "w", a potentially existing file is overwritten.
 With "a", data are appended if the file already exists. In that case, the data shape has to match the
-shape in the existing file in all entries except the first.
-
+shape in the existing file in all entries except the first.  
 The `memory_order` parameter indicates the memory order and can be either `MemoryOrder::C`, `MemoryOrder::Fortran`,
 or their aliases `MemoryOrder::RowMajor` and `MemoryOrder::ColumnMajor`.
 
