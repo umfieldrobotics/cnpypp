@@ -81,10 +81,12 @@ struct NpyArray {
   }
 
   template <typename T> T* begin() { return data<T>(); }
+  template <typename T> T const* begin() const { return data<T>(); }
 
   template <typename T> T const* cbegin() const { return data<T>(); }
 
   template <typename T> T* end() { return data<T>() + num_vals; }
+  template <typename T> T const* end() const { return data<T>() + num_vals; }
 
   template <typename T> T const* cend() const { return data<T>() + num_vals; }
 
