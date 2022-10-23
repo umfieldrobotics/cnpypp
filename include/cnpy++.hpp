@@ -50,7 +50,8 @@ struct NpyArray {
                                                       other.buffer)} {}
 
   NpyArray(std::vector<size_t> _shape, std::vector<size_t> _word_sizes,
-           std::vector<std::string> _labels, MemoryOrder _memory_order)
+           std::vector<std::string> _labels, MemoryOrder _memory_order,
+           std::unique_ptr<std::byte[]> _buffer = nullptr)
       : shape{std::move(_shape)},
         word_sizes{std::move(_word_sizes)}, labels{std::move(_labels)},
         memory_order{_memory_order}, num_vals{std::accumulate(
@@ -58,7 +59,9 @@ struct NpyArray {
                                          std::multiplies<size_t>())},
         total_value_size{std::accumulate(word_sizes.begin(), word_sizes.end(),
                                          size_t{0}, std::plus<size_t>())},
-        buffer{std::make_unique<std::byte[]>(total_value_size * num_vals)} {}
+        buffer{_buffer ? std::move(_buffer)
+                       : std::make_unique<std::byte[]>(total_value_size *
+                                                       num_vals)} {}
 
   NpyArray(NpyArray const&) = delete;
 
@@ -230,7 +233,7 @@ void write_data(TConstInputIterator start, size_t nels, std::ostream& fs) {
   using value_type =
       typename std::iterator_traits<TConstInputIterator>::value_type;
 
-  size_t constexpr buffer_size = std::min(nels, 0x10000ul);
+  size_t const buffer_size = std::min(nels, 0x10000ul);
 
   auto buffer = std::make_unique<value_type[]>(buffer_size);
 

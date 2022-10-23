@@ -17,6 +17,7 @@
 #include <boost/endian/conversion.hpp>
 #include <boost/filesystem.hpp>
 #include <gsl/span>
+#include <zip.h>
 
 #include "cnpy++.hpp"
 
@@ -303,59 +304,113 @@ cnpypp::NpyArray load_the_npz_array(std::istream& fs, uint32_t compr_bytes,
 }
 
 cnpypp::npz_t cnpypp::npz_load(std::string const& fname) {
-  std::ifstream fs{fname, std::ios::binary};
-
-  if (!fs) {
-    throw std::runtime_error("npz_load: Error! Unable to open file " + fname +
-                             "!");
+  int errcode = 0;
+  zip_t* const archive = zip_open(fname.c_str(), ZIP_RDONLY, &errcode);
+  if (!archive) {
+    zip_error_t err;
+    zip_error_init_with_code(&err, errcode);
+    throw std::runtime_error(zip_error_strerror(&err));
   }
 
   cnpypp::npz_t arrays;
+  std::vector<std::string> names{};
+  zip_int64_t const num_files = zip_get_num_entries(archive, ZIP_FL_UNCHANGED);
+  for (zip_int64_t i = 0; i < num_files; ++i) {
+    char const* const filename = zip_get_name(archive, i, ZIP_FL_ENC_RAW);
+    std::string_view const filename_view{filename};
+    auto const extension =
+        filename_view.substr(filename_view.size() - 4, filename_view.size());
 
-  while (1) {
-    std::vector<unsigned char> local_header(30);
-    fs.read(reinterpret_cast<char*>(&local_header[0]), 30);
-
-    // if we've reached the global header, stop reading
-    if (local_header[2] != 0x03 || local_header[3] != 0x04)
-      break;
-
-    // read in the variable name
-    uint16_t name_len = boost::endian::endian_load<
-        boost::uint16_t, 2, boost::endian::order::little>(&local_header[26]);
-    std::string varname(name_len, ' ');
-    fs.read(&varname[0], sizeof(char) * name_len);
-
-    // erase the lagging .npy
-    varname.erase(varname.end() - 4, varname.end());
-
-    // read in the extra field
-    uint16_t extra_field_len = boost::endian::endian_load<
-        boost::uint16_t, 2, boost::endian::order::little>(&local_header[28]);
-    if (extra_field_len > 0) {
-      std::vector<char> buff(extra_field_len);
-      fs.read(&buff[0], extra_field_len);
+    if (extension != ".npy") {
+      std::cerr << "file containes file not ending with \".npy\" (\""
+                << filename << "\"); skipping" << std::endl;
+      continue;
     }
 
-    uint16_t const compr_method = boost::endian::endian_load<
-        boost::uint16_t, 2, boost::endian::order::little>(&local_header[0] + 8);
-    uint32_t const compr_bytes =
-        boost::endian::endian_load<boost::uint32_t, 4,
-                                   boost::endian::order::little>(
-            &local_header[0] + 18);
-    uint32_t const uncompr_bytes =
-        boost::endian::endian_load<boost::uint32_t, 4,
-                                   boost::endian::order::little>(
-            &local_header[0] + 22);
+    auto const stripped_name =
+        filename_view.substr(0, filename_view.size() - 4);
 
-    if (compr_method == 0) {
-      arrays.emplace(varname, load_the_npy_file(fs));
-    } else {
-      arrays.emplace(varname,
-                     load_the_npz_array(fs, compr_bytes, uncompr_bytes));
+    zip_stat_t fileinfo;
+    zip_stat_index(archive, i, ZIP_FL_ENC_RAW, &fileinfo);
+    if (!(fileinfo.valid & ZIP_STAT_SIZE)) {
+      std::cerr << "cannot zip_stat \"" << filename << "\"; size invalid"
+                << std::endl;
+      continue;
     }
+    if (!(fileinfo.valid & ZIP_STAT_COMP_METHOD)) {
+      std::cerr << "cannot zip_stat \"" << filename
+                << "\"; compression method invalid" << std::endl;
+      continue;
+    }
+
+    zip_file_t* file = zip_fopen_index(archive, i, ZIP_FL_ENC_RAW);
+
+    size_t const max_header_size = 0x10000 + 10; // for npy version 1
+    auto header_buffer = std::make_unique<char[]>(max_header_size);
+
+    auto const read_bytes =
+        zip_fread(file, header_buffer.get(), max_header_size);
+    if (read_bytes == -1) {
+      std::cerr << "zip_fread() failed; filename \"" << filename << '\"'
+                << std::endl;
+      zip_fclose(file);
+      continue;
+    }
+
+    std::vector<size_t> shape, word_sizes;
+    std::vector<char> data_types; // filled but not used
+    std::vector<std::string> labels;
+    MemoryOrder memory_order;
+    parse_npy_header(header_buffer.get(), word_sizes, data_types, labels, shape,
+                     memory_order);
+
+    NpyArray array{std::move(shape), std::move(word_sizes), std::move(labels),
+                   memory_order};
+
+    size_t const offset = fileinfo.size - array.num_bytes();
+    if (fileinfo.size <=
+        max_header_size) { // file fits completely into buffer, meaning we have
+                           // read it completely already
+      std::copy_n(&header_buffer[offset], array.num_bytes(),
+                  array.data<uint8_t>());
+    } else { // we have only parts, seek back to beginning of data and read all
+             // from there
+      if (fileinfo.comp_method == ZIP_CM_STORE) {
+        if (zip_fseek(file, offset, SEEK_SET) != 0) {
+          std::cerr << "zip_fseek() failed; filename \"" << filename << '\"'
+                    << std::endl;
+          zip_fclose(file);
+          continue;
+        }
+      } else { // compressed data, seek impossible
+        // reopen file
+        zip_fclose(file);
+
+        file = zip_fopen_index(archive, i, ZIP_FL_ENC_RAW);
+        auto tmp = std::make_unique<char[]>(offset);
+        if (zip_fread(file, tmp.get(), offset) != offset) {
+          std::cerr << "zip_fread() failed (2); filename \"" << filename << "\""
+                    << std::endl;
+          zip_fclose(file);
+          continue;
+        }
+      }
+
+      // now read data
+      if (zip_fread(file, array.data<uint8_t>(), array.num_bytes()) !=
+          static_cast<zip_int64_t>(array.num_bytes())) {
+        std::cerr << "zip_fread() failed (1); filename \"" << filename << "\""
+                  << std::endl;
+        zip_fclose(file);
+        continue;
+      }
+    }
+
+    zip_fclose(file);
+    arrays.emplace(std::string{stripped_name}, std::move(array));
   }
 
+  zip_close(archive);
   return arrays;
 }
 
