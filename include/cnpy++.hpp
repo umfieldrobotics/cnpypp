@@ -230,7 +230,7 @@ void write_data(TConstInputIterator start, size_t nels, std::ostream& fs) {
   using value_type =
       typename std::iterator_traits<TConstInputIterator>::value_type;
 
-  size_t constexpr buffer_size = 0x10000;
+  size_t constexpr buffer_size = std::min(nels, 0x10000ul);
 
   auto buffer = std::make_unique<value_type[]>(buffer_size);
 
@@ -271,7 +271,7 @@ void write_data_tuple(TTupleIterator start, size_t nels, std::ostream& fs) {
   static auto constexpr sum = tuple_info<value_type>::sum_sizes;
   static auto constexpr offsets = tuple_info<value_type>::offsets;
 
-  size_t constexpr buffer_size = 0x10000; // number of tuples
+  size_t const buffer_size = std::min(nels, 0x10000ul); // number of tuples
 
   auto buffer = std::make_unique<char[]>(buffer_size * sum);
 
