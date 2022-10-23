@@ -90,6 +90,14 @@ struct NpyArray {
 
   template <typename T> T const* cend() const { return data<T>() + num_vals; }
 
+  template <typename T> subrange<T*, T*> make_range() {
+    return subrange{begin<T>(), end<T>()};
+  }
+
+  template <typename T> subrange<T const*, T const*> make_range() const {
+    return subrange{cbegin<T>(), cend<T>()};
+  }
+
   template <typename... TArgs>
   subrange<tuple_iterator<std::tuple<TArgs...>>> make_tuple_range() const {
     if (sizeof...(TArgs) != word_sizes.size()) {
