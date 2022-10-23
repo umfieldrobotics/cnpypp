@@ -401,110 +401,28 @@ void npz_save(std::string const& zipname, std::string fname,
   using value_type =
       typename std::iterator_traits<TConstInputIterator>::value_type;
 
-  // first, append a .npy to the fname
+  // generic code -> move to cnpy++.cpp
+  int errcode = 0;
+  zip_t* const archive = zip_open(
+      fname.c_str(), (mode == "w") ? ZIP_CREATE | ZIP_TRUNCATE : ZIP_CREATE,
+      &errcode);
+  if (!archive) {
+    zip_error_t err;
+    zip_error_init_with_code(&err, errcode);
+    throw std::runtime_error(zip_error_strerror(&err));
+  }
+
+  zip_source_t* source =
+      zip_source_function(archive, detail::npzwrite_source_callback,
+                          reinterpret_cast<void*>(arguments));
+
   fname += ".npy";
+  zip_file_add(archive, fname.c_str(), source);
 
-  // now, on with the show
-  std::fstream fs;
-  uint16_t nrecs = 0;
-  uint32_t global_header_offset = 0;
-  std::vector<char> global_header;
-
-  if (mode == "a" && _exists(zipname)) {
-    fs.open(zipname,
-            std::ios_base::in | std::ios_base::out | std::ios_base::binary);
-    // zip file exists. we need to add a new npy file to it.
-    // first read the footer. this gives us the offset and size of the global
-    // header then read and store the global header. below, we will write the
-    // the new data at the start of the global header then append the global
-    // header and footer below it
-    uint32_t global_header_size;
-    parse_zip_footer(fs, nrecs, global_header_size, global_header_offset);
-    fs.seekp(global_header_offset, std::ios_base::beg);
-    global_header.resize(global_header_size);
-    fs.read(&global_header[0], sizeof(char) * global_header_size);
-    if (fs.gcount() != global_header_size) {
-      throw std::runtime_error(
-          "npz_save: header read error while adding to existing zip");
-    }
-    fs.seekp(global_header_offset, std::ios_base::beg);
-  } else {
-    fs.open(zipname, std::ios_base::out | std::ios_base::binary);
-  }
-
-  std::vector<char> npy_header = create_npy_header(
-      shape, map_type(value_type{}), sizeof(value_type), memory_order);
-
-  size_t nels =
-      std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<size_t>());
-  size_t nbytes = nels * sizeof(value_type) + npy_header.size();
-
-  // get the CRC of the data to be added
-  uint32_t crc = _crc32(0L, (uint8_t*)&npy_header[0], npy_header.size());
-
-  auto it = start;
-  for (size_t i = 0; i < nels; ++i) {
-    auto data = *it;
-    ++it;
-    static_assert(std::is_same_v<decltype(data), value_type>);
-    crc = _crc32(crc, (uint8_t*)(&data), sizeof(value_type));
-  }
-
-  // build the local header
-  std::vector<char> local_header;
-  append(local_header, "PK");             // first part of sig
-  local_header += (uint16_t)0x0403;       // second part of sig
-  local_header += (uint16_t)20;           // min version to extract
-  local_header += (uint16_t)0;            // general purpose bit flag
-  local_header += (uint16_t)0;            // compression method
-  local_header += (uint16_t)0;            // file last mod time
-  local_header += (uint16_t)0;            // file last mod date
-  local_header += (uint32_t)crc;          // crc
-  local_header += (uint32_t)nbytes;       // compressed size
-  local_header += (uint32_t)nbytes;       // uncompressed size
-  local_header += (uint16_t)fname.size(); // fname length
-  local_header += (uint16_t)0;            // extra field length
-  append(local_header, fname);
-
-  // build global header
-  append(global_header, "PK");       // first part of sig
-  global_header += (uint16_t)0x0201; // second part of sig
-  global_header += (uint16_t)20;     // version made by
-  global_header.insert(global_header.end(), local_header.begin() + 4,
-                       local_header.begin() + 30);
-  global_header += (uint16_t)0; // file comment length
-  global_header += (uint16_t)0; // disk number where file starts
-  global_header += (uint16_t)0; // internal file attributes
-  global_header += (uint32_t)0; // external file attributes
-  global_header += (uint32_t)
-      global_header_offset; // relative offset of local file header, since it
-                            // begins where the global header used to begin
-  append(global_header, fname);
-
-  // build footer
-  std::vector<char> footer;
-  append(footer, "PK");                     // first part of sig
-  footer += (uint16_t)0x0605;               // second part of sig
-  footer += (uint16_t)0;                    // number of this disk
-  footer += (uint16_t)0;                    // disk where footer starts
-  footer += (uint16_t)(nrecs + 1);          // number of records on this disk
-  footer += (uint16_t)(nrecs + 1);          // total number of records
-  footer += (uint32_t)global_header.size(); // nbytes of global headers
-  footer += (uint32_t)(global_header_offset + nbytes +
-                       local_header.size()); // offset of start of global
-                                             // headers, since global header now
-                                             // starts after newly written array
-  footer += (uint16_t)0;                     // zip file comment length
-
-  // write everything
-  fs.write(&local_header[0], sizeof(char) * local_header.size());
-  fs.write(&npy_header[0], sizeof(char) * npy_header.size());
+  // first, append a .npy to the fname
 
   // write actual data
   write_data(start, nels, fs);
-
-  fs.write(&global_header[0], sizeof(char) * global_header.size());
-  fs.write(&footer[0], sizeof(char) * footer.size());
 }
 
 template <typename TConstInputIterator>
@@ -639,6 +557,11 @@ void npy_save(std::string const& fname,
   npy_save<TTupleIterator>(fname, labels, first,
                            gsl::span{std::data(shape), shape.size()}, mode,
                            memory_order);
+}
+
+namespace detail {
+zip_int64_t cnpypp::npzwrite_source_callback(void*, void*, zip_uint64_t,
+                                             zip_source_cmd_t);
 }
 
 } // namespace cnpypp

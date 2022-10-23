@@ -695,3 +695,67 @@ cnpypp_npyarray_get_memory_order(cnpypp_npyarray_handle const* npyarr) {
              ? cnpypp_memory_order_fortran
              : cnpypp_memory_order_c;
 }
+
+zip_int64_t cnpypp::detail::npzwrite_source_callback(void* userdata, void* data,
+                                                     zip_uint64_t length,
+                                                     zip_source_cmd_t cmd) {
+  int& position = *reinterpret_cast<int*>(userdata);
+
+  switch (cmd) {
+  case ZIP_SOURCE_OPEN:
+    std::cout << "calling callback() with ZIP_SOURCE_OPEN" << std::endl;
+    return 0;
+
+  case ZIP_SOURCE_READ: {
+    std::cout << "calling callback() with ZIP_SOURCE_READ" << std::endl;
+    int const size_remaining = range_data_npy_len - position;
+    if (size_remaining < length) {
+      std::copy_n(&range_data_npy[position], size_remaining,
+                  reinterpret_cast<unsigned char*>(data));
+      position += size_remaining;
+      return size_remaining;
+    } else {
+      std::copy_n(&range_data_npy[position], length,
+                  reinterpret_cast<unsigned char*>(data));
+      position += length;
+      return length;
+    }
+    break;
+  }
+
+  case ZIP_SOURCE_CLOSE:
+    std::cout << "calling callback() with ZIP_SOURCE_CLOSE" << std::endl;
+    return 0;
+
+  case ZIP_SOURCE_STAT: {
+    std::cout << "calling callback() with ZIP_SOURCE_STAT" << std::endl;
+    zip_stat_t* stat = reinterpret_cast<zip_stat_t*>(data);
+    zip_stat_init(stat);
+    return sizeof(zip_stat_t);
+  }
+
+  case ZIP_SOURCE_ERROR:
+    std::cout << "calling callback() with ZIP_SOURCE_ERROR" << std::endl;
+    return 0;
+
+  case ZIP_SOURCE_SUPPORTS:
+    std::cout << "calling callback() with ZIP_SOURCE_SUPPORTS" << std::endl;
+    return ZIP_SOURCE_SUPPORTS_WRITABLE;
+
+  case ZIP_SOURCE_FREE:
+    std::cout << "calling callback() with ZIP_SOURCE_FREE" << std::endl;
+    return 0;
+
+  case ZIP_SOURCE_SEEK:
+    std::cout << "calling callback() with ZIP_SOURCE_SEEK" << std::endl;
+    return 0;
+
+  case ZIP_SOURCE_TELL:
+    std::cout << "calling callback() with ZIP_SOURCE_TELL" << std::endl;
+    return 0;
+
+  default:
+    std::cerr << "should not happen: " << cmd << std::endl;
+    return 0;
+  }
+}
