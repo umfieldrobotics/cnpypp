@@ -32,8 +32,8 @@ int main() {
   });
 
   // save it to file
-  cnpypp::npy_save("arr1.npy", &data[0], shape, "w");
-  cnpypp::npy_save("arr1-cpy.npy", data.cbegin(), shape, "w");
+  cnpypp::npy_save("arr1.npy", &data[0], shape, "w");          // via pointer
+  cnpypp::npy_save("arr1-cpy.npy", data.cbegin(), shape, "w"); // via iterator
 
   // load it into a new array
   {
