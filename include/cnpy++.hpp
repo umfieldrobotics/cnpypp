@@ -26,6 +26,7 @@
 
 #include <boost/endian/buffers.hpp>
 #include <gsl/span>
+#include <zip.h>
 #include <zlib.h>
 
 #include <cnpy++.h>
@@ -34,6 +35,15 @@
 #include <tuple_util.hpp>
 
 namespace cnpypp {
+namespace detail {
+struct additional_parameters {
+  size_t header_bytes_remaining;
+  std::vector<char> npyheader;
+  std::function<size_t(void*, uint64_t)> func;
+};
+zip_int64_t npzwrite_source_callback(void*, void*, zip_uint64_t,
+                                     zip_source_cmd_t);
+} // namespace detail
 
 enum class MemoryOrder {
   Fortran = cnpypp_memory_order_fortran,
@@ -404,7 +414,7 @@ void npz_save(std::string const& zipname, std::string fname,
   // generic code -> move to cnpy++.cpp
   int errcode = 0;
   zip_t* const archive = zip_open(
-      fname.c_str(), (mode == "w") ? ZIP_CREATE | ZIP_TRUNCATE : ZIP_CREATE,
+      zipname.c_str(), (mode == "w") ? ZIP_CREATE | ZIP_TRUNCATE : ZIP_CREATE,
       &errcode);
   if (!archive) {
     zip_error_t err;
@@ -412,17 +422,42 @@ void npz_save(std::string const& zipname, std::string fname,
     throw std::runtime_error(zip_error_strerror(&err));
   }
 
+  size_t const nels =
+      std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<size_t>());
+  size_t elements_written = 0;
+
+  detail::additional_parameters parameters;
+  parameters.npyheader = create_npy_header(shape, map_type(value_type{}),
+                                           sizeof(value_type), memory_order);
+  parameters.header_bytes_remaining = parameters.npyheader.size();
+  parameters.func = [&it = start, nels, wordsize = sizeof(value_type),
+                     &elements_written](void* buffer,
+                                        zip_uint64_t buffer_size) -> size_t {
+    /* Note that the implemented method fails if buffer size - header length <
+     * wordsize. If not a single element fits into the remaining buffer, the
+     * zip_source function returns 0 (number of bytes written) too early so that
+     * libzip thinks there is no more data left. */
+    size_t const n_tbw =
+        std::min(buffer_size / wordsize, nels - elements_written);
+    value_type* word_buffer = reinterpret_cast<value_type*>(buffer);
+
+    for (size_t i = 0; i < n_tbw; ++i) {
+      word_buffer[i] = *(it++);
+    }
+
+    elements_written += n_tbw;
+
+    return n_tbw * wordsize; // number of bytes written to buffer
+  };
+
   zip_source_t* source =
       zip_source_function(archive, detail::npzwrite_source_callback,
-                          reinterpret_cast<void*>(arguments));
+                          reinterpret_cast<void*>(&parameters));
 
   fname += ".npy";
-  zip_file_add(archive, fname.c_str(), source);
-
-  // first, append a .npy to the fname
-
-  // write actual data
-  write_data(start, nels, fs);
+  zip_file_add(archive, fname.c_str(), source,
+               ZIP_FL_OVERWRITE | ZIP_FL_ENC_UTF_8);
+  zip_close(archive);
 }
 
 template <typename TConstInputIterator>
@@ -558,10 +593,4 @@ void npy_save(std::string const& fname,
                            gsl::span{std::data(shape), shape.size()}, mode,
                            memory_order);
 }
-
-namespace detail {
-zip_int64_t cnpypp::npzwrite_source_callback(void*, void*, zip_uint64_t,
-                                             zip_source_cmd_t);
-}
-
 } // namespace cnpypp

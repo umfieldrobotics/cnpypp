@@ -467,13 +467,13 @@ std::vector<char> cnpypp::create_npy_header(
 }
 
 std::vector<char> cnpypp::create_npy_header(gsl::span<size_t const> const shape,
-                                            char dtype, int size,
+                                            char dtype, int wordsize,
                                             MemoryOrder memory_order) {
   std::vector<char> dict;
   append(dict, "{'descr': '");
   dict += BigEndianTest();
   dict.push_back(dtype);
-  append(dict, std::to_string(size));
+  append(dict, std::to_string(wordsize));
   append(dict, "', 'fortran_order': ");
   append(dict, (memory_order == MemoryOrder::C) ? "False" : "True");
   append(dict, ", 'shape': (");
@@ -699,7 +699,8 @@ cnpypp_npyarray_get_memory_order(cnpypp_npyarray_handle const* npyarr) {
 zip_int64_t cnpypp::detail::npzwrite_source_callback(void* userdata, void* data,
                                                      zip_uint64_t length,
                                                      zip_source_cmd_t cmd) {
-  int& position = *reinterpret_cast<int*>(userdata);
+  auto& parameters =
+      *reinterpret_cast<cnpypp::detail::additional_parameters*>(userdata);
 
   switch (cmd) {
   case ZIP_SOURCE_OPEN:
@@ -707,20 +708,25 @@ zip_int64_t cnpypp::detail::npzwrite_source_callback(void* userdata, void* data,
     return 0;
 
   case ZIP_SOURCE_READ: {
-    std::cout << "calling callback() with ZIP_SOURCE_READ" << std::endl;
-    int const size_remaining = range_data_npy_len - position;
-    if (size_remaining < length) {
-      std::copy_n(&range_data_npy[position], size_remaining,
-                  reinterpret_cast<unsigned char*>(data));
-      position += size_remaining;
-      return size_remaining;
-    } else {
-      std::copy_n(&range_data_npy[position], length,
-                  reinterpret_cast<unsigned char*>(data));
-      position += length;
-      return length;
+    std::cout << "calling callback() with ZIP_SOURCE_READ; ";
+    size_t bytes_written = 0;
+    if (parameters.header_bytes_remaining) {
+      auto const& npyheader = parameters.npyheader;
+      auto const tbw = std::min(length, npyheader.size());
+      data = std::copy_n(
+          std::next(npyheader.cbegin(),
+                    npyheader.size() - parameters.header_bytes_remaining),
+          tbw, reinterpret_cast<char*>(data));
+      parameters.header_bytes_remaining -= tbw;
+      bytes_written = tbw;
+      std::cout << "header_bytes written: " << bytes_written << " ";
     }
-    break;
+    if (parameters.header_bytes_remaining == 0) {
+      bytes_written += parameters.func(data, length - bytes_written);
+    }
+    std::cout << "bytes_written: " << bytes_written
+              << "; buffer size: " << length << std::endl;
+    return bytes_written;
   }
 
   case ZIP_SOURCE_CLOSE:
@@ -740,7 +746,9 @@ zip_int64_t cnpypp::detail::npzwrite_source_callback(void* userdata, void* data,
 
   case ZIP_SOURCE_SUPPORTS:
     std::cout << "calling callback() with ZIP_SOURCE_SUPPORTS" << std::endl;
-    return ZIP_SOURCE_SUPPORTS_WRITABLE;
+    return zip_source_make_command_bitmap(ZIP_SOURCE_OPEN, ZIP_SOURCE_READ,
+                                          ZIP_SOURCE_CLOSE, ZIP_SOURCE_STAT,
+                                          ZIP_SOURCE_ERROR, -1);
 
   case ZIP_SOURCE_FREE:
     std::cout << "calling callback() with ZIP_SOURCE_FREE" << std::endl;
