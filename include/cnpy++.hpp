@@ -27,7 +27,7 @@
 #include <boost/endian/buffers.hpp>
 #include <gsl/span>
 #include <zip.h>
-#include <zlib.h>
+//~ #include <zlib.h>
 
 #include <cnpy++.h>
 #include <map_type.hpp>
@@ -37,10 +37,21 @@
 namespace cnpypp {
 namespace detail {
 struct additional_parameters {
-  size_t header_bytes_remaining;
-  std::vector<char> npyheader;
-  std::function<size_t(void*, uint64_t)> func;
+  additional_parameters(std::vector<char>&& _npyheader, size_t size)
+      : npyheader{std::move(_npyheader)},
+        header_bytes_remaining{npyheader.size()},
+        buffer_capacity{size}, buffer{std::make_unique<char[]>(size)} {
+    std::cout << "header_bytes_remaining = " << header_bytes_remaining << '\n';
+  }
+
+  std::vector<char> const npyheader;
+  size_t const buffer_capacity;
+
+  size_t header_bytes_remaining, bytes_buffer_written = 0, buffer_size = 0;
+  std::unique_ptr<char[]> const buffer;
+  std::function<size_t(char*, uint64_t, additional_parameters*)> func;
 };
+
 zip_int64_t npzwrite_source_callback(void*, void*, zip_uint64_t,
                                      zip_source_cmd_t);
 } // namespace detail
@@ -424,30 +435,39 @@ void npz_save(std::string const& zipname, std::string fname,
 
   size_t const nels =
       std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<size_t>());
-  size_t elements_written = 0;
+  size_t elements_written_total = 0;
+  size_t const wordsize = sizeof(value_type);
 
-  detail::additional_parameters parameters;
-  parameters.npyheader = create_npy_header(shape, map_type(value_type{}),
-                                           sizeof(value_type), memory_order);
-  parameters.header_bytes_remaining = parameters.npyheader.size();
-  parameters.func = [&it = start, nels, wordsize = sizeof(value_type),
-                     &elements_written](void* buffer,
-                                        zip_uint64_t buffer_size) -> size_t {
-    /* Note that the implemented method fails if buffer size - header length <
-     * wordsize. If not a single element fits into the remaining buffer, the
-     * zip_source function returns 0 (number of bytes written) too early so that
-     * libzip thinks there is no more data left. */
+  detail::additional_parameters parameters{
+      create_npy_header(shape, map_type(value_type{}), sizeof(value_type),
+                        memory_order),
+      wordsize};
+  parameters.func = [&it = start, nels, wordsize, &elements_written_total](
+                        char* libzip_buffer, zip_uint64_t buffer_size,
+                        detail::additional_parameters* parameters) -> size_t {
     size_t const n_tbw =
-        std::min(buffer_size / wordsize, nels - elements_written);
-    value_type* word_buffer = reinterpret_cast<value_type*>(buffer);
+        std::min(buffer_size / wordsize, nels - elements_written_total);
+    value_type* libzip_word_buffer =
+        reinterpret_cast<value_type*>(libzip_buffer);
 
     for (size_t i = 0; i < n_tbw; ++i) {
-      word_buffer[i] = *(it++);
+      libzip_word_buffer[i] = *(it++);
     }
 
-    elements_written += n_tbw;
+    elements_written_total += n_tbw;
 
-    return n_tbw * wordsize; // number of bytes written to buffer
+    if (elements_written_total < nels && buffer_size > wordsize * n_tbw) {
+      // some space left that could not be filled with a single element
+      // write one into temp. buffer
+      auto* const tmp = reinterpret_cast<value_type*>(&parameters->buffer[0]);
+      *tmp = *(it++);
+      parameters->buffer_size = wordsize;
+      std::cout << "writing one element into temp buffer\n";
+
+      ++elements_written_total;
+    }
+
+    return n_tbw * wordsize; // number of bytes written to libzip's buffer
   };
 
   zip_source_t* source =

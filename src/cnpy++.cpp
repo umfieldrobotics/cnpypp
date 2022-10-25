@@ -699,8 +699,9 @@ cnpypp_npyarray_get_memory_order(cnpypp_npyarray_handle const* npyarr) {
 zip_int64_t cnpypp::detail::npzwrite_source_callback(void* userdata, void* data,
                                                      zip_uint64_t length,
                                                      zip_source_cmd_t cmd) {
-  auto& parameters =
-      *reinterpret_cast<cnpypp::detail::additional_parameters*>(userdata);
+  auto* const parameters =
+      reinterpret_cast<cnpypp::detail::additional_parameters*>(userdata);
+  char* data_char = reinterpret_cast<char*>(data);
 
   switch (cmd) {
   case ZIP_SOURCE_OPEN:
@@ -708,24 +709,57 @@ zip_int64_t cnpypp::detail::npzwrite_source_callback(void* userdata, void* data,
     return 0;
 
   case ZIP_SOURCE_READ: {
-    std::cout << "calling callback() with ZIP_SOURCE_READ; ";
+    std::cout << "calling callback() with ZIP_SOURCE_READ;";
     size_t bytes_written = 0;
-    if (parameters.header_bytes_remaining) {
-      auto const& npyheader = parameters.npyheader;
+    if (parameters->header_bytes_remaining) {
+      std::cout << "header: data_char = " << reinterpret_cast<void*>(data_char)
+                << std::endl;
+      auto const& npyheader = parameters->npyheader;
       auto const tbw = std::min(length, npyheader.size());
-      data = std::copy_n(
+      data_char = std::copy_n(
           std::next(npyheader.cbegin(),
-                    npyheader.size() - parameters.header_bytes_remaining),
-          tbw, reinterpret_cast<char*>(data));
-      parameters.header_bytes_remaining -= tbw;
+                    npyheader.size() - parameters->header_bytes_remaining),
+          tbw, data_char);
+      parameters->header_bytes_remaining -= tbw;
       bytes_written = tbw;
       std::cout << "header_bytes written: " << bytes_written << " ";
     }
-    if (parameters.header_bytes_remaining == 0) {
-      bytes_written += parameters.func(data, length - bytes_written);
+    std::cout << "post header: data_char = "
+              << reinterpret_cast<void*>(data_char) << std::endl;
+    if (parameters->header_bytes_remaining == 0) {
+      auto const buffer_tbw =
+          parameters->buffer_size - parameters->bytes_buffer_written;
+      auto* const e =
+          std::copy_n(&parameters->buffer[parameters->bytes_buffer_written],
+                      std::min(buffer_tbw, length - bytes_written), data_char);
+      auto const bytes_written_from_buffer = std::distance(data_char, e);
+      std::cout << "copying " << bytes_written_from_buffer
+                << " bytes from temp. buffer to libzip\n";
+      parameters->bytes_buffer_written += bytes_written_from_buffer;
+      bytes_written += bytes_written_from_buffer;
+      data_char = e;
+
+      if (parameters->bytes_buffer_written == parameters->buffer_size) {
+        // buffer copied completely, treat as emtpy again
+        parameters->bytes_buffer_written = 0;
+        parameters->buffer_size = 0;
+        std::cout << "pre func: data_char = "
+                  << reinterpret_cast<void*>(data_char) << std::endl;
+        std::cout << "temp. buffer emptied; filling libzip from iterator...\n";
+
+        bytes_written +=
+            parameters->func(data_char, length - bytes_written, parameters);
+        std::cout << "post func: data_char = "
+                  << reinterpret_cast<void*>(data_char) << std::endl;
+      }
     }
     std::cout << "bytes_written: " << bytes_written
-              << "; buffer size: " << length << std::endl;
+              << "; temp. buffer size: " << parameters->buffer_size
+              << "; libzip buffer size: " << length << std::endl;
+
+    for (auto c : gsl::span(reinterpret_cast<char*>(data), bytes_written))
+      std::cerr << c;
+
     return bytes_written;
   }
 
