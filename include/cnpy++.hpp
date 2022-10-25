@@ -49,7 +49,7 @@ struct additional_parameters {
 
   size_t header_bytes_remaining, bytes_buffer_written = 0, buffer_size = 0;
   std::unique_ptr<char[]> const buffer;
-  std::function<size_t(char*, uint64_t, additional_parameters*)> func;
+  std::function<size_t(gsl::span<char>, additional_parameters*)> func;
 };
 
 zip_int64_t npzwrite_source_callback(void*, void*, zip_uint64_t,
@@ -443,12 +443,12 @@ void npz_save(std::string const& zipname, std::string fname,
                         memory_order),
       wordsize};
   parameters.func = [&it = start, nels, wordsize, &elements_written_total](
-                        char* libzip_buffer, zip_uint64_t buffer_size,
+                        gsl::span<char> libzip_buffer,
                         detail::additional_parameters* parameters) -> size_t {
-    size_t const n_tbw =
-        std::min(buffer_size / wordsize, nels - elements_written_total);
+    size_t const n_tbw = std::min(libzip_buffer.size() / wordsize,
+                                  nels - elements_written_total);
     value_type* libzip_word_buffer =
-        reinterpret_cast<value_type*>(libzip_buffer);
+        reinterpret_cast<value_type*>(libzip_buffer.data());
 
     for (size_t i = 0; i < n_tbw; ++i) {
       libzip_word_buffer[i] = *(it++);
@@ -456,7 +456,8 @@ void npz_save(std::string const& zipname, std::string fname,
 
     elements_written_total += n_tbw;
 
-    if (elements_written_total < nels && buffer_size > wordsize * n_tbw) {
+    if (elements_written_total < nels &&
+        libzip_buffer.size() > wordsize * n_tbw) {
       // some space left that could not be filled with a single element
       // write one into temp. buffer
       auto* const tmp = reinterpret_cast<value_type*>(&parameters->buffer[0]);

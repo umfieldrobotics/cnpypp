@@ -747,8 +747,8 @@ zip_int64_t cnpypp::detail::npzwrite_source_callback(void* userdata, void* data,
                   << reinterpret_cast<void*>(data_char) << std::endl;
         std::cout << "temp. buffer emptied; filling libzip from iterator...\n";
 
-        bytes_written +=
-            parameters->func(data_char, length - bytes_written, parameters);
+        bytes_written += parameters->func(
+            gsl::span(data_char, length - bytes_written), parameters);
         std::cout << "post func: data_char = "
                   << reinterpret_cast<void*>(data_char) << std::endl;
       }
