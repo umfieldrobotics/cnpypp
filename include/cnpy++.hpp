@@ -383,7 +383,10 @@ void npy_save(std::string const& fname, TConstInputIterator start,
       throw std::runtime_error{ss.str().c_str()};
     }
 
-    true_data_shape[0] += shape[0];
+    if (memory_order == MemoryOrder::C)
+      true_data_shape.front() += shape.front();
+    else
+      true_data_shape.back() += shape.back();
 
   } else { // write mode
     fs.open(fname, std::ios_base::binary | std::ios_base::out);
@@ -583,7 +586,10 @@ void npy_save(std::string const& fname,
       throw std::runtime_error{ss.str().c_str()};
     }
 
-    true_data_shape[0] += shape[0];
+    if (memory_order == MemoryOrder::C)
+      true_data_shape.front() += shape.front();
+    else
+      true_data_shape.back() += shape.back();
 
   } else { // write mode
     fs.open(fname, std::ios_base::binary | std::ios_base::out);
