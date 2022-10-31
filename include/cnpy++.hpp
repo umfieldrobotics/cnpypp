@@ -27,7 +27,6 @@
 #include <boost/endian/buffers.hpp>
 #include <gsl/span>
 #include <zip.h>
-//~ #include <zlib.h>
 
 #include <cnpy++.h>
 #include <map_type.hpp>
@@ -37,19 +36,19 @@
 namespace cnpypp {
 namespace detail {
 struct additional_parameters {
-  additional_parameters(std::vector<char>&& _npyheader, size_t size)
+  additional_parameters(
+      std::vector<char>&& _npyheader, size_t size,
+      std::function<size_t(gsl::span<char>, additional_parameters*)> _func)
       : npyheader{std::move(_npyheader)},
-        header_bytes_remaining{npyheader.size()},
-        buffer_capacity{size}, buffer{std::make_unique<char[]>(size)} {
-    std::cout << "header_bytes_remaining = " << header_bytes_remaining << '\n';
-  }
+        header_bytes_remaining{npyheader.size()}, buffer_capacity{size},
+        buffer{std::make_unique<char[]>(size)}, func{_func} {}
 
   std::vector<char> const npyheader;
   size_t const buffer_capacity;
 
   size_t header_bytes_remaining, bytes_buffer_written = 0, buffer_size = 0;
   std::unique_ptr<char[]> const buffer;
-  std::function<size_t(gsl::span<char>, additional_parameters*)> func;
+  std::function<size_t(gsl::span<char>, additional_parameters*)> const func;
 };
 
 zip_int64_t npzwrite_source_callback(void*, void*, zip_uint64_t,
@@ -417,37 +416,27 @@ void npy_save(std::string const& fname, TConstInputIterator start,
                                 memory_order);
 }
 
+std::tuple<size_t, zip_t*> prepare_npz(std::string const& zipname,
+                                       gsl::span<size_t const> const shape,
+                                       std::string_view mode);
+
+void finalize_npz(zip_t*, std::string, detail::additional_parameters&);
+
 template <typename TConstInputIterator>
-void npz_save(std::string const& zipname, std::string fname,
+void npz_save(std::string const& zipname, std::string const& fname,
               TConstInputIterator start, gsl::span<size_t const> const shape,
               std::string_view mode = "w",
               MemoryOrder memory_order = MemoryOrder::C) {
   using value_type =
       typename std::iterator_traits<TConstInputIterator>::value_type;
+  size_t constexpr wordsize = sizeof(value_type);
 
-  // generic code -> move to cnpy++.cpp
-  int errcode = 0;
-  zip_t* const archive = zip_open(
-      zipname.c_str(), (mode == "w") ? ZIP_CREATE | ZIP_TRUNCATE : ZIP_CREATE,
-      &errcode);
-  if (!archive) {
-    zip_error_t err;
-    zip_error_init_with_code(&err, errcode);
-    throw std::runtime_error(zip_error_strerror(&err));
-  }
-
-  size_t const nels =
-      std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<size_t>());
+  auto [nels, archive] = prepare_npz(zipname, shape, mode);
   size_t elements_written_total = 0;
-  size_t const wordsize = sizeof(value_type);
 
-  detail::additional_parameters parameters{
-      create_npy_header(shape, map_type(value_type{}), sizeof(value_type),
-                        memory_order),
-      wordsize};
-  parameters.func = [&it = start, nels, wordsize, &elements_written_total](
-                        gsl::span<char> libzip_buffer,
-                        detail::additional_parameters* parameters) -> size_t {
+  auto callback = [&it = start, nels, wordsize, &elements_written_total](
+                      gsl::span<char> libzip_buffer,
+                      detail::additional_parameters* parameters) -> size_t {
     size_t const n_tbw = std::min(libzip_buffer.size() / wordsize,
                                   nels - elements_written_total);
     value_type* libzip_word_buffer =
@@ -466,7 +455,6 @@ void npz_save(std::string const& zipname, std::string fname,
       auto* const tmp = reinterpret_cast<value_type*>(&parameters->buffer[0]);
       *tmp = *(it++);
       parameters->buffer_size = wordsize;
-      std::cout << "writing one element into temp buffer\n";
 
       ++elements_written_total;
     }
@@ -474,14 +462,65 @@ void npz_save(std::string const& zipname, std::string fname,
     return n_tbw * wordsize; // number of bytes written to libzip's buffer
   };
 
-  zip_source_t* source =
-      zip_source_function(archive, detail::npzwrite_source_callback,
-                          reinterpret_cast<void*>(&parameters));
+  detail::additional_parameters parameters{
+      create_npy_header(shape, map_type(value_type{}), wordsize, memory_order),
+      wordsize, callback};
 
-  fname += ".npy";
-  zip_file_add(archive, fname.c_str(), source,
-               ZIP_FL_OVERWRITE | ZIP_FL_ENC_UTF_8);
-  zip_close(archive);
+  finalize_npz(archive, fname, parameters);
+}
+
+template <typename TTupleIterator>
+void npz_save(std::string const& zipname, std::string const& fname,
+              std::vector<std::string_view> const& labels, TTupleIterator first,
+              gsl::span<size_t const> const shape, std::string_view mode = "w",
+              MemoryOrder memory_order = MemoryOrder::C) {
+  using value_type = typename std::iterator_traits<TTupleIterator>::value_type;
+
+  if (labels.size() != std::tuple_size_v<value_type>) {
+    throw std::runtime_error(
+        "libcnpy++: number of labels does not match tuple size");
+  }
+
+  static auto constexpr dtypes = tuple_info<value_type>::data_types;
+  static auto constexpr sizes = tuple_info<value_type>::element_sizes;
+  static auto constexpr sum_size = tuple_info<value_type>::sum_sizes;
+
+  auto [nels, archive] = prepare_npz(zipname, shape, mode);
+  size_t elements_written_total = 0;
+
+  auto callback = [&it = first, nels, sum_size, &elements_written_total](
+                      gsl::span<char> libzip_buffer,
+                      detail::additional_parameters* parameters) -> size_t {
+    size_t const n_tbw = std::min(libzip_buffer.size() / sum_size,
+                                  nels - elements_written_total);
+
+    for (size_t i = 0; i < n_tbw; ++i) {
+      auto const& tup = *(it++);
+      fill<value_type>(tup, libzip_buffer.data() + i * sum_size);
+    }
+
+    elements_written_total += n_tbw;
+
+    if (elements_written_total < nels &&
+        libzip_buffer.size() > sum_size * n_tbw) {
+      // some space left that could not be filled with a single element
+      // write one into temp. buffer
+      char* const tmp = reinterpret_cast<char*>(&parameters->buffer[0]);
+      auto const& tup = *(it++);
+      fill<value_type>(tup, parameters->buffer.get());
+      parameters->buffer_size = sum_size;
+
+      ++elements_written_total;
+    }
+
+    return n_tbw * sum_size; // number of bytes written to libzip's buffer
+  };
+
+  detail::additional_parameters parameters{
+      create_npy_header(shape, labels, dtypes, sizes, memory_order), sum_size,
+      callback};
+
+  finalize_npz(archive, fname, parameters);
 }
 
 template <typename TConstInputIterator>
@@ -551,18 +590,18 @@ void npy_save(std::string const& fname,
                      true_data_shape, memory_order_exist);
 
     if (tuple_info<value_type>::size != labels_exist.size()) {
-      throw std::runtime_error{
-          "npy_save(): appending failed: sizes not matching"};
+      throw std::runtime_error{"libcnpy++ error in npy_save(): appending "
+                               "failed: sizes not matching"};
     }
     if (!std::equal(data_types_exist.cbegin(), data_types_exist.cend(),
                     dtypes.cbegin())) {
-      throw std::runtime_error{
-          "npy_save(): appending failed: data type descriptors not matching"};
+      throw std::runtime_error{"libcnpy++ error in npy_save(): appending "
+                               "failed: data type descriptors not matching"};
     }
     if (!std::equal(word_sizes_exist.cbegin(), word_sizes_exist.cend(),
                     sizes.cbegin())) {
-      throw std::runtime_error{
-          "npy_save(): appending failed: element sizes not matching"};
+      throw std::runtime_error{"libcnpy++ error in npy_save(): appending "
+                               "failed: element sizes not matching"};
     }
 
     if (memory_order != memory_order_exist) {
@@ -572,7 +611,7 @@ void npy_save(std::string const& fname,
 
     if (true_data_shape.size() != shape.size()) {
       std::stringstream ss;
-      ss << "libnpy error: npy_save attempting to append misdimensioned "
+      ss << "libcnpy++ error: npy_save attempting to append misdimensioned "
             "data to "
          << std::quoted(fname);
       throw std::runtime_error{ss.str().c_str()};
@@ -581,7 +620,7 @@ void npy_save(std::string const& fname,
     if (shape.size() > 0 && !std::equal(std::next(shape.begin()), shape.end(),
                                         std::next(true_data_shape.begin()))) {
       std::stringstream ss;
-      ss << "libnpy error: npy_save attempting to append misshaped data to "
+      ss << "libcnpy++ error: npy_save attempting to append misshaped data to "
          << std::quoted(fname);
       throw std::runtime_error{ss.str().c_str()};
     }

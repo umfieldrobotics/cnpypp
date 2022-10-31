@@ -705,15 +705,11 @@ zip_int64_t cnpypp::detail::npzwrite_source_callback(void* userdata, void* data,
 
   switch (cmd) {
   case ZIP_SOURCE_OPEN:
-    std::cout << "calling callback() with ZIP_SOURCE_OPEN" << std::endl;
     return 0;
 
   case ZIP_SOURCE_READ: {
-    std::cout << "calling callback() with ZIP_SOURCE_READ;";
     size_t bytes_written = 0;
     if (parameters->header_bytes_remaining) {
-      std::cout << "header: data_char = " << reinterpret_cast<void*>(data_char)
-                << std::endl;
       auto const& npyheader = parameters->npyheader;
       auto const tbw = std::min(length, npyheader.size());
       data_char = std::copy_n(
@@ -722,10 +718,7 @@ zip_int64_t cnpypp::detail::npzwrite_source_callback(void* userdata, void* data,
           tbw, data_char);
       parameters->header_bytes_remaining -= tbw;
       bytes_written = tbw;
-      std::cout << "header_bytes written: " << bytes_written << " ";
     }
-    std::cout << "post header: data_char = "
-              << reinterpret_cast<void*>(data_char) << std::endl;
     if (parameters->header_bytes_remaining == 0) {
       auto const buffer_tbw =
           parameters->buffer_size - parameters->bytes_buffer_written;
@@ -733,8 +726,6 @@ zip_int64_t cnpypp::detail::npzwrite_source_callback(void* userdata, void* data,
           std::copy_n(&parameters->buffer[parameters->bytes_buffer_written],
                       std::min(buffer_tbw, length - bytes_written), data_char);
       auto const bytes_written_from_buffer = std::distance(data_char, e);
-      std::cout << "copying " << bytes_written_from_buffer
-                << " bytes from temp. buffer to libzip\n";
       parameters->bytes_buffer_written += bytes_written_from_buffer;
       bytes_written += bytes_written_from_buffer;
       data_char = e;
@@ -743,61 +734,75 @@ zip_int64_t cnpypp::detail::npzwrite_source_callback(void* userdata, void* data,
         // buffer copied completely, treat as emtpy again
         parameters->bytes_buffer_written = 0;
         parameters->buffer_size = 0;
-        std::cout << "pre func: data_char = "
-                  << reinterpret_cast<void*>(data_char) << std::endl;
-        std::cout << "temp. buffer emptied; filling libzip from iterator...\n";
 
         bytes_written += parameters->func(
             gsl::span(data_char, length - bytes_written), parameters);
-        std::cout << "post func: data_char = "
-                  << reinterpret_cast<void*>(data_char) << std::endl;
       }
     }
-    std::cout << "bytes_written: " << bytes_written
-              << "; temp. buffer size: " << parameters->buffer_size
-              << "; libzip buffer size: " << length << std::endl;
-
-    for (auto c : gsl::span(reinterpret_cast<char*>(data), bytes_written))
-      std::cerr << c;
 
     return bytes_written;
   }
 
   case ZIP_SOURCE_CLOSE:
-    std::cout << "calling callback() with ZIP_SOURCE_CLOSE" << std::endl;
     return 0;
 
   case ZIP_SOURCE_STAT: {
-    std::cout << "calling callback() with ZIP_SOURCE_STAT" << std::endl;
     zip_stat_t* stat = reinterpret_cast<zip_stat_t*>(data);
     zip_stat_init(stat);
     return sizeof(zip_stat_t);
   }
 
   case ZIP_SOURCE_ERROR:
-    std::cout << "calling callback() with ZIP_SOURCE_ERROR" << std::endl;
     return 0;
 
   case ZIP_SOURCE_SUPPORTS:
-    std::cout << "calling callback() with ZIP_SOURCE_SUPPORTS" << std::endl;
     return zip_source_make_command_bitmap(ZIP_SOURCE_OPEN, ZIP_SOURCE_READ,
                                           ZIP_SOURCE_CLOSE, ZIP_SOURCE_STAT,
                                           ZIP_SOURCE_ERROR, -1);
 
   case ZIP_SOURCE_FREE:
-    std::cout << "calling callback() with ZIP_SOURCE_FREE" << std::endl;
     return 0;
 
   case ZIP_SOURCE_SEEK:
-    std::cout << "calling callback() with ZIP_SOURCE_SEEK" << std::endl;
     return 0;
 
   case ZIP_SOURCE_TELL:
-    std::cout << "calling callback() with ZIP_SOURCE_TELL" << std::endl;
     return 0;
 
   default:
-    std::cerr << "should not happen: " << cmd << std::endl;
+    std::cerr << "libcnpy++: should not happen: " << cmd << std::endl;
     return 0;
   }
+}
+
+std::tuple<size_t, zip_t*>
+cnpypp::prepare_npz(std::string const& zipname,
+                    gsl::span<size_t const> const shape,
+                    std::string_view mode) {
+  int errcode = 0;
+  zip_t* const archive = zip_open(
+      zipname.c_str(), (mode == "w") ? (ZIP_CREATE | ZIP_TRUNCATE) : ZIP_CREATE,
+      &errcode);
+  if (!archive) {
+    zip_error_t err;
+    zip_error_init_with_code(&err, errcode);
+    throw std::runtime_error(zip_error_strerror(&err));
+  }
+
+  size_t const nels =
+      std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<size_t>());
+
+  return std::tuple{nels, archive};
+}
+
+void cnpypp::finalize_npz(zip_t* archive, std::string fname,
+                          detail::additional_parameters& parameters) {
+  zip_source_t* source =
+      zip_source_function(archive, detail::npzwrite_source_callback,
+                          reinterpret_cast<void*>(&parameters));
+
+  fname += ".npy";
+  zip_file_add(archive, fname.c_str(), source,
+               ZIP_FL_OVERWRITE | ZIP_FL_ENC_UTF_8);
+  zip_close(archive);
 }
