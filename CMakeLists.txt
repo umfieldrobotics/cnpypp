@@ -3,20 +3,24 @@ CMAKE_MINIMUM_REQUIRED(VERSION 3.10)
 project(CNPYpp LANGUAGES CXX C)
 
 include(GNUInstallDirs)
+include(FetchContent)
 
 find_package(ZLIB REQUIRED)
 find_package(libzip REQUIRED)
 find_package(Boost 1.74 COMPONENTS filesystem REQUIRED)
 
-include(FetchContent)
+find_package(Microsoft.GSL 3.1.0 QUIET)
+if (NOT Microsoft.GSL_FOUND)
+  message(STATUS "Microsoft.GSL not found; downloading")
+  FetchContent_Declare(GSL
+      GIT_REPOSITORY "https://github.com/microsoft/GSL"
+      GIT_TAG "v3.1.0"
+      GIT_SHALLOW True
+  )
 
-FetchContent_Declare(GSL
-    GIT_REPOSITORY "https://github.com/microsoft/GSL"
-    GIT_TAG "v3.1.0"
-    GIT_SHALLOW True
-)
+  FetchContent_MakeAvailable(GSL)
+endif()
 
-FetchContent_MakeAvailable(GSL)
 
 add_library(cnpy++ "src/cnpy++.cpp" "src/c_interface.c")
 target_compile_features(cnpy++ PUBLIC cxx_std_17)
@@ -25,7 +29,7 @@ target_include_directories(cnpy++ PUBLIC ${Boost_INCLUDE_DIR} ${ZLIB_INCLUDE_DIR
 target_include_directories(cnpy++ SYSTEM PUBLIC $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>)
 target_include_directories(cnpy++ SYSTEM INTERFACE $<INSTALL_INTERFACE:$<INSTALL_PREFIX>/include>)
 target_link_libraries(cnpy++ PRIVATE ${ZLIB_LIBRARIES} Boost::filesystem)
-target_link_libraries(cnpy++ PUBLIC GSL libzip::zip)
+target_link_libraries(cnpy++ PUBLIC Microsoft.GSL::GSL libzip::zip)
 if(MSVC)
   target_compile_options(cnpy++ PRIVATE /W4 /WX)
 else()
@@ -47,14 +51,19 @@ target_link_libraries(range_example cnpy++)
 target_compile_features(range_example PRIVATE cxx_std_20)
 set_property(TARGET range_example PROPERTY CXX_EXTENSIONS OFF)
 
-FetchContent_Declare(range-v3
-    GIT_REPOSITORY "https://github.com/ericniebler/range-v3"
-    GIT_TAG "0.12.0"
-    GIT_SHALLOW True
-)
-FetchContent_MakeAvailable(range-v3)
+find_package(range-v3 REQUIRED)
+if (NOT range-v3_FOUND)
+  message (STATUS  "range-v3 not found; downloading")
+  FetchContent_Declare(range-v3
+      GIT_REPOSITORY "https://github.com/ericniebler/range-v3"
+      GIT_TAG "0.12.0"
+      GIT_SHALLOW True
+  )
+
+  FetchContent_MakeAvailable(range-v3)
+endif()
 
 add_executable(range_zip_example "examples/range_zip_example.cpp")
-target_link_libraries(range_zip_example cnpy++ range-v3)
+target_link_libraries(range_zip_example cnpy++ range-v3::range-v3)
 target_compile_features(range_zip_example PRIVATE cxx_std_17)
 set_property(TARGET range_zip_example PROPERTY CXX_EXTENSIONS OFF)
