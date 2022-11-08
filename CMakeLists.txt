@@ -51,7 +51,7 @@ target_link_libraries(range_example cnpy++)
 target_compile_features(range_example PRIVATE cxx_std_20)
 set_property(TARGET range_example PROPERTY CXX_EXTENSIONS OFF)
 
-find_package(range-v3 REQUIRED)
+find_package(range-v3 QUIET)
 if (NOT range-v3_FOUND)
   message (STATUS  "range-v3 not found; downloading")
   FetchContent_Declare(range-v3
