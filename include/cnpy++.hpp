@@ -10,6 +10,7 @@
 #include <cassert>
 #include <climits>
 #include <cstring>
+#include <functional>
 #include <fstream>
 #include <iomanip>
 #include <iterator>
