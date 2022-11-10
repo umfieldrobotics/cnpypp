@@ -2,6 +2,8 @@ CMAKE_MINIMUM_REQUIRED(VERSION 3.10)
 
 project(CNPYpp LANGUAGES CXX C)
 
+get_directory_property(hasParent PARENT_DIRECTORY)
+
 include(GNUInstallDirs)
 
 find_package(ZLIB REQUIRED)
@@ -35,37 +37,42 @@ endif()
 install(TARGETS "cnpy++" LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
 install(FILES "tuple_util.hpp" "stide_iterator" "map_type.hpp" "cnpy++.hpp" "cnpy++.h" DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
-add_executable(example1 "examples/example1.cpp")
-target_link_libraries(example1 cnpy++)
-
-add_executable(example_c "examples/example_c.c")
-target_link_libraries(example_c cnpy++)
-
-add_executable(range_example "examples/range_example.cpp")
-target_link_libraries(range_example cnpy++)
-target_compile_features(range_example PRIVATE cxx_std_20)
-set_property(TARGET range_example PROPERTY CXX_EXTENSIONS OFF)
-
-FetchContent_Declare(range-v3
-    GIT_REPOSITORY "https://github.com/ericniebler/range-v3"
-    GIT_TAG "0.12.0"
-    GIT_SHALLOW True
-)
-FetchContent_MakeAvailable(range-v3)
-
-add_executable(range_zip_example "examples/range_zip_example.cpp")
-target_link_libraries(range_zip_example cnpy++ range-v3)
-target_compile_features(range_zip_example PRIVATE cxx_std_17)
-set_property(TARGET range_zip_example PROPERTY CXX_EXTENSIONS OFF)
-
-
-add_executable(test "examples/test.cpp")
-target_link_libraries(test PRIVATE cnpy++)
-target_compile_features(test PRIVATE cxx_std_17)
-set_property(TARGET test PROPERTY CXX_EXTENSIONS OFF)
-
-add_executable(tuple_ex "examples/tuple_ex.cpp")
-target_link_libraries(tuple_ex PRIVATE cnpy++)
-target_compile_features(tuple_ex PRIVATE cxx_std_17)
-set_property(TARGET tuple_ex PROPERTY CXX_EXTENSIONS OFF)
-target_include_directories(tuple_ex PRIVATE ${Boost_INCLUDE_DIR})
+if (NOT hasParent)
+  add_executable(example1 "examples/example1.cpp")
+  target_link_libraries(example1 cnpy++)
+  
+  add_executable(example_c "examples/example_c.c")
+  target_link_libraries(example_c cnpy++)
+  
+  add_executable(range_example "examples/range_example.cpp")
+  target_link_libraries(range_example cnpy++)
+  target_compile_features(range_example PRIVATE cxx_std_20)
+  set_property(TARGET range_example PROPERTY CXX_EXTENSIONS OFF)
+  
+  FetchContent_Declare(range-v3
+      GIT_REPOSITORY "https://github.com/ericniebler/range-v3"
+      GIT_TAG "0.12.0"
+      GIT_SHALLOW True
+  )
+  FetchContent_MakeAvailable(range-v3)
+  
+  add_executable(range_zip_example "examples/range_zip_example.cpp")
+  target_link_libraries(range_zip_example cnpy++ range-v3)
+  target_compile_features(range_zip_example PRIVATE cxx_std_17)
+  set_property(TARGET range_zip_example PROPERTY CXX_EXTENSIONS OFF)
+  
+  
+  add_executable(test "examples/test.cpp")
+  target_link_libraries(test PRIVATE cnpy++)
+  target_compile_features(test PRIVATE cxx_std_17)
+  set_property(TARGET test PROPERTY CXX_EXTENSIONS OFF)
+  
+  add_executable(tuple_ex "examples/tuple_ex.cpp")
+  target_link_libraries(tuple_ex PRIVATE cnpy++)
+  target_compile_features(tuple_ex PRIVATE cxx_std_17)
+  set_property(TARGET tuple_ex PROPERTY CXX_EXTENSIONS OFF)
+  target_include_directories(tuple_ex PRIVATE ${Boost_INCLUDE_DIR})
+  
+  add_executable(example2 "examples/example2.cpp")
+  target_link_libraries(example2 cnpy++ range-v3)
+endif()
