@@ -10,8 +10,8 @@
 #include <cassert>
 #include <climits>
 #include <cstring>
-#include <functional>
 #include <fstream>
+#include <functional>
 #include <iomanip>
 #include <iterator>
 #include <map>
@@ -433,9 +433,11 @@ void npz_save(std::string const& zipname, std::string const& fname,
   size_t constexpr wordsize = sizeof(value_type);
 
   auto [nels, archive] = prepare_npz(zipname, shape, mode);
+  auto const Nels = nels; // clang++ can't capture nels in lambda (?)
+
   size_t elements_written_total = 0;
 
-  auto callback = [&it = start, nels, wordsize, &elements_written_total](
+  auto callback = [&it = start, nels = Nels, wordsize, &elements_written_total](
                       gsl::span<char> libzip_buffer,
                       detail::additional_parameters* parameters) -> size_t {
     size_t const n_tbw = std::min(libzip_buffer.size() / wordsize,
@@ -484,12 +486,13 @@ void npz_save(std::string const& zipname, std::string const& fname,
 
   static auto constexpr dtypes = tuple_info<value_type>::data_types;
   static auto constexpr sizes = tuple_info<value_type>::element_sizes;
-  static auto constexpr sum_size = tuple_info<value_type>::sum_sizes;
+  auto constexpr sum_size = tuple_info<value_type>::sum_sizes;
 
   auto [nels, archive] = prepare_npz(zipname, shape, mode);
+  auto const Nels = nels; // clang++ can't capture nels in lambda (?)
   size_t elements_written_total = 0;
 
-  auto callback = [&it = first, nels, sum_size, &elements_written_total](
+  auto callback = [&it = first, nels = Nels, sum_size, &elements_written_total](
                       gsl::span<char> libzip_buffer,
                       detail::additional_parameters* parameters) -> size_t {
     size_t const n_tbw = std::min(libzip_buffer.size() / sum_size,
