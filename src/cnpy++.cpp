@@ -16,7 +16,7 @@
 
 #include <boost/endian/conversion.hpp>
 #include <boost/filesystem.hpp>
-#include <gsl/span>
+#include <zip.h>
 
 #include "cnpy++.hpp"
 
@@ -55,7 +55,7 @@ void cnpypp::parse_npy_header(std::istream::char_type const* buffer,
       boost::endian::endian_load<boost::uint16_t, 2,
                                  boost::endian::order::little>(
           (unsigned char const*)buffer + 8);
-  gsl::span header{reinterpret_cast<char const*>(buffer + 0x0a), header_len};
+  cnpypp::span<char const> header(reinterpret_cast<char const*>(buffer + 0x0a), header_len);
 
   if (!(major_version == 1 && minor_version == 0)) {
     throw std::runtime_error("parse_npy_header: version not supported");
@@ -98,11 +98,11 @@ void cnpypp::parse_npy_header(std::istream& fs, std::vector<size_t>& word_sizes,
       std::make_unique<std::istream::char_type[]>(header_len);
   fs.read(header_buffer.get(), header_len);
 
-  parse_npy_dict(gsl::span(header_buffer.get(), header_len), word_sizes,
+  parse_npy_dict(cnpypp::span<std::istream::char_type>(header_buffer.get(), header_len), word_sizes,
                  data_types, labels, shape, memory_order);
 }
 
-void cnpypp::parse_npy_dict(gsl::span<std::istream::char_type const> buffer,
+void cnpypp::parse_npy_dict(cnpypp::span<std::istream::char_type const> buffer,
                             std::vector<size_t>& word_sizes,
                             std::vector<char>& data_types,
                             std::vector<std::string>& labels,
@@ -256,162 +256,139 @@ cnpypp::NpyArray load_the_npy_file(std::istream& fs) {
   return arr;
 }
 
-cnpypp::NpyArray load_the_npz_array(std::istream& fs, uint32_t compr_bytes,
-                                    uint32_t uncompr_bytes) {
+cnpypp::NpyArray load_npy(zip_t* archive, zip_int64_t index) {
+  zip_stat_t fileinfo;
+  zip_stat_index(archive, index, ZIP_FL_ENC_RAW, &fileinfo);
+  if (!(fileinfo.valid & ZIP_STAT_SIZE)) {
+    throw std::runtime_error{"libcnpy++: zip_stat() failed, size invalid"};
+  }
+  if (!(fileinfo.valid & ZIP_STAT_COMP_METHOD)) {
+    throw std::runtime_error{
+        "libcnpy++: zip_stat() failed, comp_method invalid"};
+  }
 
-  //  std::vector<std::istream::char_type> buffer_compr(compr_bytes);
-  auto buffer_compr = std::make_unique<std::istream::char_type[]>(compr_bytes);
-  auto buffer_uncompr =
-      std::make_unique<std::istream::char_type[]>(uncompr_bytes);
+  zip_file_t* file = zip_fopen_index(archive, index, ZIP_FL_ENC_RAW);
 
-  //  std::vector<std::istream::char_type> buffer_uncompr(uncompr_bytes);
-  fs.read(&buffer_compr[0], compr_bytes);
+  size_t const max_header_size = 0x10000 + 10; // for npy version 1
+  auto header_buffer = std::make_unique<char[]>(max_header_size);
 
-  [[maybe_unused]] int err;
-  z_stream d_stream;
-
-  d_stream.zalloc = Z_NULL;
-  d_stream.zfree = Z_NULL;
-  d_stream.opaque = Z_NULL;
-  d_stream.avail_in = 0;
-  d_stream.next_in = Z_NULL;
-  err = inflateInit2(&d_stream, -MAX_WBITS);
-
-  d_stream.avail_in = compr_bytes;
-  d_stream.next_in = reinterpret_cast<uint8_t*>(&buffer_compr[0]);
-  d_stream.avail_out = uncompr_bytes;
-  d_stream.next_out = reinterpret_cast<uint8_t*>(&buffer_uncompr[0]);
-
-  err = inflate(&d_stream, Z_FINISH);
-  err = inflateEnd(&d_stream);
+  auto const read_bytes = zip_fread(file, header_buffer.get(), max_header_size);
+  if (read_bytes == -1) {
+    zip_fclose(file);
+    throw std::runtime_error{"libcnpy++: zip_fread() failed"};
+  }
 
   std::vector<size_t> shape, word_sizes;
   std::vector<char> data_types; // filled but not used
   std::vector<std::string> labels;
-  cnpypp::MemoryOrder memory_order;
-  cnpypp::parse_npy_header(&buffer_uncompr[0], word_sizes, data_types, labels,
-                           shape, memory_order);
+  MemoryOrder memory_order;
+  parse_npy_header(header_buffer.get(), word_sizes, data_types, labels, shape,
+                   memory_order);
 
-  cnpypp::NpyArray array(shape, std::move(word_sizes), std::move(labels),
-                         memory_order);
+  NpyArray array{std::move(shape), std::move(word_sizes), std::move(labels),
+                 memory_order};
 
-  size_t const offset = uncompr_bytes - array.num_bytes();
-  memcpy(array.data<unsigned char>(), &buffer_uncompr[0] + offset,
-         array.num_bytes());
+  zip_int64_t const offset = fileinfo.size - array.num_bytes();
+  if (fileinfo.size <= max_header_size) {
+    // file fits completely into buffer, meaning we have
+    // read it completely already
 
+    std::copy_n(&header_buffer[offset], array.num_bytes(),
+                array.data<uint8_t>());
+  } else { // we have only parts, seek back to beginning of data and read all
+           // from there
+    // works only if zip_source is seekable itself
+    // change this to zip_file_is_seekable() when libzip 1.9.0 is in use
+    // everywhere
+    if (fileinfo.comp_method == ZIP_CM_STORE) {
+      if (zip_fseek(file, offset, SEEK_SET) != 0) {
+        zip_fclose(file);
+        throw std::runtime_error{"libcnpy++: zip_seek() failed"};
+      }
+    } else { // compressed data, seek impossible
+      // reopen file
+      zip_fclose(file);
+
+      file = zip_fopen_index(archive, index, ZIP_FL_ENC_RAW);
+      auto tmp = std::make_unique<char[]>(offset);
+      if (zip_fread(file, tmp.get(), offset) != offset) {
+        zip_fclose(file);
+        throw std::runtime_error{"libcnpy++: zip_fread() failed"};
+      }
+    }
+
+    // now read data
+    if (zip_fread(file, array.data<uint8_t>(), array.num_bytes()) !=
+        static_cast<zip_int64_t>(array.num_bytes())) {
+      zip_fclose(file);
+      throw std::runtime_error{"libcnpy++: zip_fread() failed"};
+    }
+  }
+
+  zip_fclose(file);
   return array;
 }
 
 cnpypp::npz_t cnpypp::npz_load(std::string const& fname) {
-  std::ifstream fs{fname, std::ios::binary};
-
-  if (!fs) {
-    throw std::runtime_error("npz_load: Error! Unable to open file " + fname +
-                             "!");
+  int errcode = 0;
+  zip_t* const archive = zip_open(fname.c_str(), ZIP_RDONLY, &errcode);
+  if (!archive) {
+    zip_error_t err;
+    zip_error_init_with_code(&err, errcode);
+    throw std::runtime_error(zip_error_strerror(&err));
   }
 
   cnpypp::npz_t arrays;
+  std::vector<std::string> names{};
+  zip_int64_t const num_files = zip_get_num_entries(archive, ZIP_FL_UNCHANGED);
+  for (zip_int64_t i = 0; i < num_files; ++i) {
+    char const* const filename = zip_get_name(archive, i, ZIP_FL_ENC_RAW);
+    std::string_view const filename_view{filename};
+    auto const extension =
+        filename_view.substr(filename_view.size() - 4, filename_view.size());
 
-  while (1) {
-    std::vector<unsigned char> local_header(30);
-    fs.read(reinterpret_cast<char*>(&local_header[0]), 30);
-
-    // if we've reached the global header, stop reading
-    if (local_header[2] != 0x03 || local_header[3] != 0x04)
-      break;
-
-    // read in the variable name
-    uint16_t name_len = boost::endian::endian_load<
-        boost::uint16_t, 2, boost::endian::order::little>(&local_header[26]);
-    std::string varname(name_len, ' ');
-    fs.read(&varname[0], sizeof(char) * name_len);
-
-    // erase the lagging .npy
-    varname.erase(varname.end() - 4, varname.end());
-
-    // read in the extra field
-    uint16_t extra_field_len = boost::endian::endian_load<
-        boost::uint16_t, 2, boost::endian::order::little>(&local_header[28]);
-    if (extra_field_len > 0) {
-      std::vector<char> buff(extra_field_len);
-      fs.read(&buff[0], extra_field_len);
+    if (extension != ".npy") {
+      std::cerr << "file containes file not ending with \".npy\" (\""
+                << filename << "\"); skipping" << std::endl;
+      continue;
     }
 
-    uint16_t const compr_method = boost::endian::endian_load<
-        boost::uint16_t, 2, boost::endian::order::little>(&local_header[0] + 8);
-    uint32_t const compr_bytes =
-        boost::endian::endian_load<boost::uint32_t, 4,
-                                   boost::endian::order::little>(
-            &local_header[0] + 18);
-    uint32_t const uncompr_bytes =
-        boost::endian::endian_load<boost::uint32_t, 4,
-                                   boost::endian::order::little>(
-            &local_header[0] + 22);
+    auto const stripped_name =
+        filename_view.substr(0, filename_view.size() - 4);
 
-    if (compr_method == 0) {
-      arrays.emplace(varname, load_the_npy_file(fs));
-    } else {
-      arrays.emplace(varname,
-                     load_the_npz_array(fs, compr_bytes, uncompr_bytes));
-    }
+    // BREAK HERE INTO SUBFUNCION
+    auto array = load_npy(archive, i);
+    arrays.emplace(std::string{stripped_name}, std::move(array));
   }
 
+  zip_close(archive);
   return arrays;
 }
 
 cnpypp::NpyArray cnpypp::npz_load(std::string const& fname,
                                   std::string const& varname) {
-  std::ifstream fs(fname, std::ios::binary);
-
-  if (!fs)
-    throw std::runtime_error("npz_load: Unable to open file " + fname);
-
-  while (1) {
-    std::vector<unsigned char> local_header(30);
-    fs.read(reinterpret_cast<char*>(&local_header[0]), sizeof(char) * 30);
-
-    // if we've reached the global header, stop reading
-    if (local_header[2] != 0x03 || local_header[3] != 0x04)
-      break;
-
-    // read in the variable name
-    uint16_t const name_len = boost::endian::endian_load<
-        boost::uint16_t, 2, boost::endian::order::little>(&local_header[26]);
-    std::string vname(name_len, ' ');
-    fs.read(&vname[0], sizeof(char) * name_len);
-    vname.erase(vname.end() - 4, vname.end()); // erase the lagging .npy
-
-    // read in the extra field
-    uint16_t const extra_field_len = boost::endian::endian_load<
-        boost::uint16_t, 2, boost::endian::order::little>(&local_header[28]);
-    fs.seekg(extra_field_len, std::ios_base::cur); // skip past the extra field
-
-    uint16_t const compr_method = boost::endian::endian_load<
-        boost::uint16_t, 2, boost::endian::order::little>(&local_header[0] + 8);
-    uint32_t const compr_bytes =
-        boost::endian::endian_load<boost::uint32_t, 4,
-                                   boost::endian::order::little>(
-            &local_header[0] + 18);
-    uint32_t const uncompr_bytes =
-        boost::endian::endian_load<boost::uint32_t, 4,
-                                   boost::endian::order::little>(
-            &local_header[0] + 22);
-
-    if (vname == varname) {
-      return (compr_method == 0)
-                 ? load_the_npy_file(fs)
-                 : load_the_npz_array(fs, compr_bytes, uncompr_bytes);
-    } else {
-      // skip past the data
-      uint32_t const size = boost::endian::endian_load<
-          boost::uint32_t, 4, boost::endian::order::little>(&local_header[22]);
-      fs.seekg(size, std::ios_base::cur);
-    }
+  int errcode = 0;
+  zip_t* const archive = zip_open(fname.c_str(), ZIP_RDONLY, &errcode);
+  if (!archive) {
+    zip_error_t err;
+    zip_error_init_with_code(&err, errcode);
+    throw std::runtime_error(zip_error_strerror(&err));
   }
 
-  // if we get here, we haven't found the variable in the file
-  throw std::runtime_error("npz_load: Variable name " + varname +
-                           " not found in " + fname);
+  std::string const full_filename = varname + ".npy";
+  zip_int64_t const index =
+      zip_name_locate(archive, full_filename.c_str(), ZIP_FL_ENC_RAW);
+  if (index == -1) {
+    // if we get here, we haven't found the variable in the file
+    std::stringstream ss;
+    ss << "npz_load: Variable name " << std::quoted(varname) << " not found in "
+       << std::quoted(fname);
+    throw std::runtime_error{ss.str().c_str()};
+  }
+
+  auto array = load_npy(archive, index);
+  zip_close(archive);
+  return array;
 }
 
 cnpypp::NpyArray cnpypp::npy_load(std::string const& fname) {
@@ -424,9 +401,9 @@ cnpypp::NpyArray cnpypp::npy_load(std::string const& fname) {
 }
 
 std::vector<char> cnpypp::create_npy_header(
-    gsl::span<size_t const> const shape,
-    gsl::span<std::string_view const> labels, gsl::span<char const> dtypes,
-    gsl::span<size_t const> sizes, MemoryOrder memory_order) {
+    cnpypp::span<size_t const> const shape,
+    cnpypp::span<std::string_view const> labels, cnpypp::span<char const> dtypes,
+    cnpypp::span<size_t const> sizes, MemoryOrder memory_order) {
   std::vector<char> dict;
   append(dict, "{'descr': [");
 
@@ -488,14 +465,14 @@ std::vector<char> cnpypp::create_npy_header(
   return header;
 }
 
-std::vector<char> cnpypp::create_npy_header(gsl::span<size_t const> const shape,
-                                            char dtype, int size,
+std::vector<char> cnpypp::create_npy_header(cnpypp::span<size_t const> const shape,
+                                            char dtype, int wordsize,
                                             MemoryOrder memory_order) {
   std::vector<char> dict;
   append(dict, "{'descr': '");
   dict += BigEndianTest();
   dict.push_back(dtype);
-  append(dict, std::to_string(size));
+  append(dict, std::to_string(wordsize));
   append(dict, "', 'fortran_order': ");
   append(dict, (memory_order == MemoryOrder::C) ? "False" : "True");
   append(dict, ", 'shape': (");
@@ -716,4 +693,115 @@ cnpypp_npyarray_get_memory_order(cnpypp_npyarray_handle const* npyarr) {
   return (array.getMemoryOrder() == cnpypp::MemoryOrder::Fortran)
              ? cnpypp_memory_order_fortran
              : cnpypp_memory_order_c;
+}
+
+zip_int64_t cnpypp::detail::npzwrite_source_callback(void* userdata, void* data,
+                                                     zip_uint64_t length,
+                                                     zip_source_cmd_t cmd) {
+  auto* const parameters =
+      reinterpret_cast<cnpypp::detail::additional_parameters*>(userdata);
+  char* data_char = reinterpret_cast<char*>(data);
+
+  switch (cmd) {
+  case ZIP_SOURCE_OPEN:
+    return 0;
+
+  case ZIP_SOURCE_READ: {
+    size_t bytes_written = 0;
+    if (parameters->header_bytes_remaining) {
+      auto const& npyheader = parameters->npyheader;
+      auto const tbw = std::min(length, npyheader.size());
+      data_char = std::copy_n(
+          std::next(npyheader.cbegin(),
+                    npyheader.size() - parameters->header_bytes_remaining),
+          tbw, data_char);
+      parameters->header_bytes_remaining -= tbw;
+      bytes_written = tbw;
+    }
+    if (parameters->header_bytes_remaining == 0) {
+      auto const buffer_tbw =
+          parameters->buffer_size - parameters->bytes_buffer_written;
+      auto* const e =
+          std::copy_n(&parameters->buffer[parameters->bytes_buffer_written],
+                      std::min(buffer_tbw, length - bytes_written), data_char);
+      auto const bytes_written_from_buffer = std::distance(data_char, e);
+      parameters->bytes_buffer_written += bytes_written_from_buffer;
+      bytes_written += bytes_written_from_buffer;
+      data_char = e;
+
+      if (parameters->bytes_buffer_written == parameters->buffer_size) {
+        // buffer copied completely, treat as emtpy again
+        parameters->bytes_buffer_written = 0;
+        parameters->buffer_size = 0;
+
+        bytes_written += parameters->func(
+            cnpypp::span<char>(data_char, length - bytes_written), parameters);
+      }
+    }
+
+    return bytes_written;
+  }
+
+  case ZIP_SOURCE_CLOSE:
+    return 0;
+
+  case ZIP_SOURCE_STAT: {
+    zip_stat_t* stat = reinterpret_cast<zip_stat_t*>(data);
+    zip_stat_init(stat);
+    return sizeof(zip_stat_t);
+  }
+
+  case ZIP_SOURCE_ERROR:
+    return 0;
+
+  case ZIP_SOURCE_SUPPORTS:
+    return zip_source_make_command_bitmap(ZIP_SOURCE_OPEN, ZIP_SOURCE_READ,
+                                          ZIP_SOURCE_CLOSE, ZIP_SOURCE_STAT,
+                                          ZIP_SOURCE_ERROR, -1);
+
+  case ZIP_SOURCE_FREE:
+    return 0;
+
+  case ZIP_SOURCE_SEEK:
+    return 0;
+
+  case ZIP_SOURCE_TELL:
+    return 0;
+
+  default:
+    std::cerr << "libcnpy++: should not happen: " << cmd << std::endl;
+    return 0;
+  }
+}
+
+std::tuple<size_t, zip_t*>
+cnpypp::prepare_npz(std::string const& zipname,
+                    cnpypp::span<size_t const> const shape,
+                    std::string_view mode) {
+  int errcode = 0;
+  zip_t* const archive = zip_open(
+      zipname.c_str(), (mode == "w") ? (ZIP_CREATE | ZIP_TRUNCATE) : ZIP_CREATE,
+      &errcode);
+  if (!archive) {
+    zip_error_t err;
+    zip_error_init_with_code(&err, errcode);
+    throw std::runtime_error(zip_error_strerror(&err));
+  }
+
+  size_t const nels =
+      std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<size_t>());
+
+  return std::tuple{nels, archive};
+}
+
+void cnpypp::finalize_npz(zip_t* archive, std::string fname,
+                          detail::additional_parameters& parameters) {
+  zip_source_t* source =
+      zip_source_function(archive, detail::npzwrite_source_callback,
+                          reinterpret_cast<void*>(&parameters));
+
+  fname += ".npy";
+  zip_file_add(archive, fname.c_str(), source,
+               ZIP_FL_OVERWRITE | ZIP_FL_ENC_UTF_8);
+  zip_close(archive);
 }
