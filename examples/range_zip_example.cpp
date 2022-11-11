@@ -7,7 +7,7 @@
 #include <range/v3/view/zip.hpp>
 
 int main() {
-  auto const i = ranges::views::ints(1, 1024);
+  auto const i = ranges::views::ints(1, 21);
   auto const sq = i | ranges::views::transform([](auto x) { return x * x; });
   auto const trip =
       i | ranges::views::transform([](auto x) { return x * x * x; });

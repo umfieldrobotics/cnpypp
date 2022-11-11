@@ -26,8 +26,17 @@
 #include <vector>
 
 #include <boost/endian/buffers.hpp>
-#include <gsl/span>
 #include <zip.h>
+
+#if defined(MSGSL_SPAN)
+#include <gsl/span>
+#elif defined(GSL_LITE_SPAN)
+#include <gsl-lite/gsl-lite.hpp>
+#elif defined(BOOST_SPAN)
+#include <boost/core/span.hpp>
+#else
+#include <span>
+#endif
 
 #include <cnpy++.h>
 #include <map_type.hpp>
@@ -35,11 +44,22 @@
 #include <tuple_util.hpp>
 
 namespace cnpypp {
+template <typename T>
+#if defined(MSGSL_SPAN)
+using span = gsl::span<T>;
+#elif defined(GSL_LITE_SPAN)
+using span = gsl_lite::span<T>;
+#elif defined(BOOST_SPAN)
+using span = boost::span<T>;
+#else
+using span = std::span<T>;
+#endif
+
 namespace detail {
 struct additional_parameters {
   additional_parameters(
       std::vector<char>&& _npyheader, size_t size,
-      std::function<size_t(gsl::span<char>, additional_parameters*)> _func)
+      std::function<size_t(cnpypp::span<char>, additional_parameters*)> _func)
       : npyheader{std::move(_npyheader)},
         header_bytes_remaining{npyheader.size()}, buffer_capacity{size},
         buffer{std::make_unique<char[]>(size)}, func{_func} {}
@@ -49,7 +69,7 @@ struct additional_parameters {
 
   size_t header_bytes_remaining, bytes_buffer_written = 0, buffer_size = 0;
   std::unique_ptr<char[]> const buffer;
-  std::function<size_t(gsl::span<char>, additional_parameters*)> const func;
+  std::function<size_t(cnpypp::span<char>, additional_parameters*)> const func;
 };
 
 zip_int64_t npzwrite_source_callback(void*, void*, zip_uint64_t,
@@ -185,13 +205,14 @@ char BigEndianTest();
 
 bool _exists(std::string const&); // calls boost::filesystem::exists()
 
-std::vector<char> create_npy_header(gsl::span<size_t const> shape, char dtype,
-                                    int size, MemoryOrder = MemoryOrder::C);
+std::vector<char> create_npy_header(cnpypp::span<size_t const> shape,
+                                    char dtype, int size,
+                                    MemoryOrder = MemoryOrder::C);
 
-std::vector<char> create_npy_header(gsl::span<size_t const> shape,
-                                    gsl::span<std::string_view const> labels,
-                                    gsl::span<char const> dtypes,
-                                    gsl::span<size_t const> sizes,
+std::vector<char> create_npy_header(cnpypp::span<size_t const> shape,
+                                    cnpypp::span<std::string_view const> labels,
+                                    cnpypp::span<char const> dtypes,
+                                    cnpypp::span<size_t const> sizes,
                                     MemoryOrder memory_order);
 
 void parse_npy_header(std::istream& fs, std::vector<size_t>& word_sizes,
@@ -206,7 +227,7 @@ void parse_npy_header(std::istream::char_type const* buffer,
                       std::vector<std::string>& labels,
                       std::vector<size_t>& shape, MemoryOrder& memory_order);
 
-void parse_npy_dict(gsl::span<std::istream::char_type const> buffer,
+void parse_npy_dict(cnpypp::span<std::istream::char_type const> buffer,
                     std::vector<size_t>& word_sizes,
                     std::vector<char>& data_types,
                     std::vector<std::string>& labels,
@@ -335,7 +356,8 @@ std::vector<char>& append(std::vector<char>&, std::string_view);
 
 template <typename TConstInputIterator>
 void npy_save(std::string const& fname, TConstInputIterator start,
-              gsl::span<size_t const> const shape, std::string_view mode = "w",
+              cnpypp::span<size_t const> const shape,
+              std::string_view mode = "w",
               MemoryOrder memory_order = MemoryOrder::C) {
   std::fstream fs;
   std::vector<size_t>
@@ -412,20 +434,20 @@ void npy_save(std::string const& fname, TConstInputIterator start,
               std::initializer_list<size_t> const shape,
               std::string_view mode = "w",
               MemoryOrder memory_order = MemoryOrder::C) {
-  npy_save<TConstInputIterator>(fname, start,
-                                gsl::span{std::data(shape), shape.size()}, mode,
-                                memory_order);
+  npy_save<TConstInputIterator>(
+      fname, start, cnpypp::span<size_t const>{std::data(shape), shape.size()},
+      mode, memory_order);
 }
 
 std::tuple<size_t, zip_t*> prepare_npz(std::string const& zipname,
-                                       gsl::span<size_t const> const shape,
+                                       cnpypp::span<size_t const> const shape,
                                        std::string_view mode);
 
 void finalize_npz(zip_t*, std::string, detail::additional_parameters&);
 
 template <typename TConstInputIterator>
 void npz_save(std::string const& zipname, std::string const& fname,
-              TConstInputIterator start, gsl::span<size_t const> const shape,
+              TConstInputIterator start, cnpypp::span<size_t const> const shape,
               std::string_view mode = "w",
               MemoryOrder memory_order = MemoryOrder::C) {
   using value_type =
@@ -438,7 +460,7 @@ void npz_save(std::string const& zipname, std::string const& fname,
   size_t elements_written_total = 0;
 
   auto callback = [&it = start, nels = Nels, wordsize, &elements_written_total](
-                      gsl::span<char> libzip_buffer,
+                      cnpypp::span<char> libzip_buffer,
                       detail::additional_parameters* parameters) -> size_t {
     size_t const n_tbw = std::min(libzip_buffer.size() / wordsize,
                                   nels - elements_written_total);
@@ -475,7 +497,8 @@ void npz_save(std::string const& zipname, std::string const& fname,
 template <typename TTupleIterator>
 void npz_save(std::string const& zipname, std::string const& fname,
               std::vector<std::string_view> const& labels, TTupleIterator first,
-              gsl::span<size_t const> const shape, std::string_view mode = "w",
+              cnpypp::span<size_t const> const shape,
+              std::string_view mode = "w",
               MemoryOrder memory_order = MemoryOrder::C) {
   using value_type = typename std::iterator_traits<TTupleIterator>::value_type;
 
@@ -493,7 +516,7 @@ void npz_save(std::string const& zipname, std::string const& fname,
   size_t elements_written_total = 0;
 
   auto callback = [&it = first, nels = Nels, sum_size, &elements_written_total](
-                      gsl::span<char> libzip_buffer,
+                      cnpypp::span<char> libzip_buffer,
                       detail::additional_parameters* parameters) -> size_t {
     size_t const n_tbw = std::min(libzip_buffer.size() / sum_size,
                                   nels - elements_written_total);
@@ -534,7 +557,8 @@ void npz_save(std::string const& zipname, std::string fname,
               std::string_view mode = "w",
               MemoryOrder memory_order = MemoryOrder::C) {
   npz_save(zipname, std::move(fname), start,
-           gsl::span{std::data(shape), shape.size()}, mode, memory_order);
+           cnpypp::span<size_t const>{std::data(shape), shape.size()}, mode,
+           memory_order);
 }
 
 template <typename TForwardIterator>
@@ -556,7 +580,7 @@ void npy_save(std::string const& fname, TForwardIterator first,
 }
 
 template <typename T>
-void npy_save(std::string const& fname, gsl::span<T const> data,
+void npy_save(std::string const& fname, cnpypp::span<T const> data,
               std::string_view mode = "w") {
   npy_save<T>(fname, data.cbegin(), data.cend(), mode);
 }
@@ -564,7 +588,8 @@ void npy_save(std::string const& fname, gsl::span<T const> data,
 template <typename TTupleIterator>
 void npy_save(std::string const& fname,
               std::vector<std::string_view> const& labels, TTupleIterator first,
-              gsl::span<size_t const> const shape, std::string_view mode = "w",
+              cnpypp::span<size_t const> const shape,
+              std::string_view mode = "w",
               MemoryOrder memory_order = MemoryOrder::C) {
   using value_type = typename std::iterator_traits<TTupleIterator>::value_type;
 
@@ -659,8 +684,9 @@ void npy_save(std::string const& fname,
               std::initializer_list<size_t const> shape,
               std::string_view mode = "w",
               MemoryOrder memory_order = MemoryOrder::C) {
-  npy_save<TTupleIterator>(fname, labels, first,
-                           gsl::span{std::data(shape), shape.size()}, mode,
-                           memory_order);
+  npy_save<TTupleIterator>(
+      fname, labels, first,
+      cnpypp::span<size_t const>{std::data(shape), shape.size()}, mode,
+      memory_order);
 }
 } // namespace cnpypp

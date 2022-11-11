@@ -16,7 +16,6 @@
 
 #include <boost/endian/conversion.hpp>
 #include <boost/filesystem.hpp>
-#include <gsl/span>
 #include <zip.h>
 
 #include "cnpy++.hpp"
@@ -56,7 +55,7 @@ void cnpypp::parse_npy_header(std::istream::char_type const* buffer,
       boost::endian::endian_load<boost::uint16_t, 2,
                                  boost::endian::order::little>(
           (unsigned char const*)buffer + 8);
-  gsl::span header{reinterpret_cast<char const*>(buffer + 0x0a), header_len};
+  cnpypp::span<char const> header(reinterpret_cast<char const*>(buffer + 0x0a), header_len);
 
   if (!(major_version == 1 && minor_version == 0)) {
     throw std::runtime_error("parse_npy_header: version not supported");
@@ -99,11 +98,11 @@ void cnpypp::parse_npy_header(std::istream& fs, std::vector<size_t>& word_sizes,
       std::make_unique<std::istream::char_type[]>(header_len);
   fs.read(header_buffer.get(), header_len);
 
-  parse_npy_dict(gsl::span(header_buffer.get(), header_len), word_sizes,
+  parse_npy_dict(cnpypp::span<std::istream::char_type>(header_buffer.get(), header_len), word_sizes,
                  data_types, labels, shape, memory_order);
 }
 
-void cnpypp::parse_npy_dict(gsl::span<std::istream::char_type const> buffer,
+void cnpypp::parse_npy_dict(cnpypp::span<std::istream::char_type const> buffer,
                             std::vector<size_t>& word_sizes,
                             std::vector<char>& data_types,
                             std::vector<std::string>& labels,
@@ -402,9 +401,9 @@ cnpypp::NpyArray cnpypp::npy_load(std::string const& fname) {
 }
 
 std::vector<char> cnpypp::create_npy_header(
-    gsl::span<size_t const> const shape,
-    gsl::span<std::string_view const> labels, gsl::span<char const> dtypes,
-    gsl::span<size_t const> sizes, MemoryOrder memory_order) {
+    cnpypp::span<size_t const> const shape,
+    cnpypp::span<std::string_view const> labels, cnpypp::span<char const> dtypes,
+    cnpypp::span<size_t const> sizes, MemoryOrder memory_order) {
   std::vector<char> dict;
   append(dict, "{'descr': [");
 
@@ -466,7 +465,7 @@ std::vector<char> cnpypp::create_npy_header(
   return header;
 }
 
-std::vector<char> cnpypp::create_npy_header(gsl::span<size_t const> const shape,
+std::vector<char> cnpypp::create_npy_header(cnpypp::span<size_t const> const shape,
                                             char dtype, int wordsize,
                                             MemoryOrder memory_order) {
   std::vector<char> dict;
@@ -736,7 +735,7 @@ zip_int64_t cnpypp::detail::npzwrite_source_callback(void* userdata, void* data,
         parameters->buffer_size = 0;
 
         bytes_written += parameters->func(
-            gsl::span(data_char, length - bytes_written), parameters);
+            cnpypp::span<char>(data_char, length - bytes_written), parameters);
       }
     }
 
@@ -777,7 +776,7 @@ zip_int64_t cnpypp::detail::npzwrite_source_callback(void* userdata, void* data,
 
 std::tuple<size_t, zip_t*>
 cnpypp::prepare_npz(std::string const& zipname,
-                    gsl::span<size_t const> const shape,
+                    cnpypp::span<size_t const> const shape,
                     std::string_view mode) {
   int errcode = 0;
   zip_t* const archive = zip_open(

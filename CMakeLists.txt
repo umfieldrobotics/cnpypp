@@ -2,36 +2,65 @@ CMAKE_MINIMUM_REQUIRED(VERSION 3.10)
 
 project(CNPYpp LANGUAGES CXX C)
 
+add_library(cnpy++ "src/cnpy++.cpp" "src/c_interface.c")
+
 get_directory_property(hasParent PARENT_DIRECTORY)
+
+# user can choose which implementation of span<T> to use
+set(CNPYPP_SPAN_IMPL CACHE STRING "select implementation of cnpypp::span<T>")
+set_property(CACHE CNPYPP_SPAN_IMPL PROPERTY STRINGS "MS_GSL" "GSL_LITE" "BOOST")
+
+set(minimum_boost_version 1.74)
+
+include(FetchContent)
+
+if(CNPYPP_SPAN_IMPL STREQUAL "MS_GSL")
+  target_compile_definitions(cnpy++ PUBLIC "MSGSL_SPAN")
+  find_package(Microsoft.GSL 3.1.0 QUIET)
+  if (NOT Microsoft.GSL_FOUND)
+    message(STATUS "Microsoft.GSL not found; downloading")
+    FetchContent_Declare(GSL
+      GIT_REPOSITORY "https://github.com/microsoft/GSL"
+      GIT_TAG "v3.1.0"
+      GIT_SHALLOW True
+    )
+    FetchContent_MakeAvailable(GSL)
+    target_link_libraries(cnpy++ PUBLIC Microsoft.GSL::GSL)
+  endif()
+
+elseif(CNPYPP_SPAN_IMPL STREQUAL "GSL_LITE")
+  target_compile_definitions(cnpy++ PUBLIC "GSL_LITE_SPAN")
+  find_package(gsl-lite 0.40 QUIET)
+  if (NOT gsl-lite_FOUND)
+    message(STATUS "gsl-lite not found; downloading")
+    FetchContent_Declare(GSLLite
+      GIT_REPOSITORY "https://github.com/gsl-lite/gsl-lite"
+      GIT_TAG "v0.40.0"
+      GIT_SHALLOW True
+    )
+    FetchContent_MakeAvailable(GSLLite)
+    target_link_libraries(cnpy++ PUBLIC gsl::gsl-lite-v1)
+  endif()
+
+elseif(CNPYPP_SPAN_IMPL STREQUAL "BOOST")
+  target_compile_definitions(cnpy++ PUBLIC "BOOST_SPAN")
+  set(minimum_boost_version 1.78)
+endif()
 
 include(GNUInstallDirs)
 include(FetchContent)
 
 find_package(ZLIB REQUIRED)
 find_package(libzip REQUIRED)
-find_package(Boost 1.74 COMPONENTS filesystem REQUIRED)
+find_package(Boost ${minimum_boost_version} COMPONENTS filesystem REQUIRED)
 
-find_package(Microsoft.GSL 3.1.0 QUIET)
-if (NOT Microsoft.GSL_FOUND)
-  message(STATUS "Microsoft.GSL not found; downloading")
-  FetchContent_Declare(GSL
-      GIT_REPOSITORY "https://github.com/microsoft/GSL"
-      GIT_TAG "v3.1.0"
-      GIT_SHALLOW True
-  )
-
-  FetchContent_MakeAvailable(GSL)
-endif()
-
-
-add_library(cnpy++ "src/cnpy++.cpp" "src/c_interface.c")
 target_compile_features(cnpy++ PUBLIC cxx_std_17)
 set_property(TARGET cnpy++ PROPERTY CXX_EXTENSIONS OFF)
 target_include_directories(cnpy++ PUBLIC ${Boost_INCLUDE_DIR} ${ZLIB_INCLUDE_DIRS})
 target_include_directories(cnpy++ SYSTEM PUBLIC $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>)
 target_include_directories(cnpy++ SYSTEM INTERFACE $<INSTALL_INTERFACE:$<INSTALL_PREFIX>/include>)
 target_link_libraries(cnpy++ PRIVATE ${ZLIB_LIBRARIES} Boost::filesystem)
-target_link_libraries(cnpy++ PUBLIC Microsoft.GSL::GSL libzip::zip)
+target_link_libraries(cnpy++ PUBLIC libzip::zip)
 if(MSVC)
   target_compile_options(cnpy++ PRIVATE /W4 /WX)
 else()
