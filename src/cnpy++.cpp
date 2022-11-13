@@ -55,7 +55,8 @@ void cnpypp::parse_npy_header(std::istream::char_type const* buffer,
       boost::endian::endian_load<boost::uint16_t, 2,
                                  boost::endian::order::little>(
           (unsigned char const*)buffer + 8);
-  cnpypp::span<char const> header(reinterpret_cast<char const*>(buffer + 0x0a), header_len);
+  cnpypp::span<char const> header(reinterpret_cast<char const*>(buffer + 0x0a),
+                                  header_len);
 
   if (!(major_version == 1 && minor_version == 0)) {
     throw std::runtime_error("parse_npy_header: version not supported");
@@ -98,8 +99,9 @@ void cnpypp::parse_npy_header(std::istream& fs, std::vector<size_t>& word_sizes,
       std::make_unique<std::istream::char_type[]>(header_len);
   fs.read(header_buffer.get(), header_len);
 
-  parse_npy_dict(cnpypp::span<std::istream::char_type>(header_buffer.get(), header_len), word_sizes,
-                 data_types, labels, shape, memory_order);
+  parse_npy_dict(
+      cnpypp::span<std::istream::char_type>(header_buffer.get(), header_len),
+      word_sizes, data_types, labels, shape, memory_order);
 }
 
 void cnpypp::parse_npy_dict(cnpypp::span<std::istream::char_type const> buffer,
@@ -400,10 +402,12 @@ cnpypp::NpyArray cnpypp::npy_load(std::string const& fname) {
   return load_the_npy_file(fs);
 }
 
-std::vector<char> cnpypp::create_npy_header(
-    cnpypp::span<size_t const> const shape,
-    cnpypp::span<std::string_view const> labels, cnpypp::span<char const> dtypes,
-    cnpypp::span<size_t const> sizes, MemoryOrder memory_order) {
+std::vector<char>
+cnpypp::create_npy_header(cnpypp::span<size_t const> const shape,
+                          cnpypp::span<std::string_view const> labels,
+                          cnpypp::span<char const> dtypes,
+                          cnpypp::span<size_t const> sizes,
+                          MemoryOrder memory_order) {
   std::vector<char> dict;
   append(dict, "{'descr': [");
 
@@ -465,9 +469,9 @@ std::vector<char> cnpypp::create_npy_header(
   return header;
 }
 
-std::vector<char> cnpypp::create_npy_header(cnpypp::span<size_t const> const shape,
-                                            char dtype, int wordsize,
-                                            MemoryOrder memory_order) {
+std::vector<char>
+cnpypp::create_npy_header(cnpypp::span<size_t const> const shape, char dtype,
+                          int wordsize, MemoryOrder memory_order) {
   std::vector<char> dict;
   append(dict, "{'descr': '");
   dict += BigEndianTest();
