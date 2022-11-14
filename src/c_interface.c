@@ -4,11 +4,6 @@
 // http://www.opensource.org/licenses/mit-license.php
 
 #include "cnpy++.h"
-#include <zlib.h>
-
-uint32_t _crc32(unsigned long int crc, uint8_t const* data, unsigned int len) {
-  return crc32(crc, data, len);
-}
 
 int cnpypp_npy_save_1d(char const* fname, enum cnpypp_data_type dtype,
                        void const* start, size_t const num_elem,
