@@ -18,7 +18,7 @@ int main() {
 
   std::array const shape{z.size()};
   cnpypp::npz_save("range_zip_data.npz", "struct", {"a", "b", "c"}, z.begin(),
-                   gsl::span{shape.data(), shape.size()});
+                   cnpypp::span<size_t const>{shape.data(), shape.size()});
 
   return EXIT_SUCCESS;
 }
