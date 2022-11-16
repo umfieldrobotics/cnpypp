@@ -685,16 +685,16 @@ size_t const* cnpypp_npyarray_get_shape(cnpypp_npyarray_handle const* npyarr,
   auto const& array = *reinterpret_cast<cnpypp::NpyArray const*>(npyarr);
 
   if (rank != nullptr) {
-    *rank = array.getShape().size();
+    *rank = array.shape.size();
   }
 
-  return array.getShape().data();
+  return array.shape.data();
 }
 
 enum cnpypp_memory_order
 cnpypp_npyarray_get_memory_order(cnpypp_npyarray_handle const* npyarr) {
   auto const& array = *reinterpret_cast<cnpypp::NpyArray const*>(npyarr);
-  return (array.getMemoryOrder() == cnpypp::MemoryOrder::Fortran)
+  return (array.memory_order == cnpypp::MemoryOrder::Fortran)
              ? cnpypp_memory_order_fortran
              : cnpypp_memory_order_c;
 }

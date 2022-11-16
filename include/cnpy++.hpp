@@ -183,12 +183,6 @@ struct NpyArray {
     }
   }
 
-  std::vector<size_t> const& getShape() const { return shape; }
-  std::vector<std::string> const& getLabels() const { return labels; }
-  std::vector<size_t> const& getWordSizes() const { return word_sizes; }
-  MemoryOrder getMemoryOrder() const { return memory_order; }
-
-private:
   std::vector<size_t> const shape;
   std::vector<size_t> const word_sizes;
   std::vector<std::string> const labels;
@@ -196,6 +190,7 @@ private:
   size_t const num_vals;
   size_t const total_value_size;
 
+private:
   std::unique_ptr<std::byte[]> buffer;
 };
 
