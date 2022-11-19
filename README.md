@@ -7,20 +7,31 @@ in any similar C++/npy library.
 Additionally, C bindings are provided for a limited, but most useful subset of the C++ functionality.
 
 ## Motivation
-NumPy data files are a binary data format for serializing multi-dimenstional, potentially also nested, arrays.
+NumPy data files are a binary data format for serializing multi-dimenstional arrays.
 Due to its simplicity, it is a convenient format for scientific computing to be used not only from within Python. 
 
-## Installation
+## Building cnpy++
 
-The default installation directory is /usr/local.
-To specify a different directory, add `-DCMAKE_INSTALL_PREFIX=/path/to/install/dir` to the cmake invocation in step 4.
+### Requirements
 
-1. get [cmake](www.cmake.org)
-2. create a build directory, say $HOME/build
-3. cd $HOME/build
-4. cmake /path/to/cnpy++
-5. make
-6. make install
+* a C++17-compatible compiler (gcc and clang have been tested succesfully)
+* libzip-devel
+* boost (at least 1.74; if using >=1.78, you can use `boost::span` (see below)
+* optional: pre-installed versions of either Microsoft GSL or gsl-lite
+
+### Instructions
+
+cnpy++ is built via cmake. After downloading the code (say, into `/path/to/cnpy++`), create
+a build directory (say, `/path/to/cnpy++-build`). From within that directory, call
+`cmake -DCNPYPP_SPAN_IMPL=<...> /path/to/cnpy++`. cnpy++ needs an implementation of the
+`span<T>` type. This is available in Microsoft GSL, gsl-lite, boost since version 1.78 and in the STL
+if compiling with C++20 support. To select which implementation you want to use, set the CMake
+cache variable `CNPYPP_SPAN_IMPL` to either `MS_GSL`, `GSL_LITE` or `BOOST`. If set to `MS_GSL`
+or `GSL_LITE`, the corresponding library will be downloaded by cmake (using git) if not found already
+on the system.
+
+After the cmake invocation returned successfully, call `make cnpy++` to compile the library,
+or just `make` to compile the examples, too.
 
 ## Usage
 
@@ -28,7 +39,7 @@ To specify a different directory, add `-DCMAKE_INSTALL_PREFIX=/path/to/install/d
 and a compiled part, which can either be a shared or a static library.
 
 
-### Manual compilation
+### Manual
 If you build `cnpy++` with `cmake -DBUILD_SHARED_LIBS=ON`, you obtain a shared library, `libcnpy++.so`,
 that you need to link to your executable. On Unix systems with g++ or clang++ compilers, you can run
 
@@ -45,10 +56,21 @@ g++ -o my_executable my_executable.cpp /path/to/libcnpy++.a
 
 ### cmake-assisted compilation
 
-TODO
+You can include cnpy++ in your own cmake-based project without having to install it first e.g. by using
+cmake's `FetchContent`. Add the following snippet to your `CMakeLists.txt`.
+
+```
+include(FetchContent)
+FetchContent_Declare(cnpy++
+    GIT_REPOSITORY "https://gitlab.iap.kit.edu/mreininghaus/cnpypp.git"
+    GIT_SHALLOW True
+)
+FetchContent_MakeAvailable(cnpy++)
+```
 
 ## API documentation
-All functions, data structures, etc. are placed inside the `cnpypp` namespace.
+All functions, data structures, etc. are placed inside the `cnpypp` namespace. The type alias
+`cnpypp::span<T>` is an alias to the implementation of `span<T>` as explained above.
 
 ### Writing data to .npy
 
@@ -59,7 +81,7 @@ template <typename TConstInputIterator>
 void npy_save(std::string const& fname, TConstInputIterator start,
               std::initializer_list<size_t> const shape,
               std::string_view mode = "w",
-              MemoryOrder memory_order = MemoryOrder::C)
+              MemoryOrder memory_order = MemoryOrder::C);
 ```
 This function writes data from an interator `start` into the file indicated by the filename `fname`.  
 The `shape` tuple describes the dimensions of the array, with the total number of elements given
@@ -73,11 +95,10 @@ or their aliases `MemoryOrder::RowMajor` and `MemoryOrder::ColumnMajor`.
 ```c++
 template <typename TConstInputIterator>
 void npy_save(std::string const& fname, TConstInputIterator start,
-              gsl::span<size_t const> const shape, std::string_view mode = "w",
+              cnpypp::span<size_t const> const shape, std::string_view mode = "w",
               MemoryOrder memory_order = MemoryOrder::C)
 ```
-Use this overload if `shape` is an array, vector or alike. We are using `gsl::span` as C++17 implementation
-of `std::span`, which is available only from C++20 on.
+Use this overload if `shape` is an array, vector or alike.
 
 ```c++
 template <typename TForwardIterator>
@@ -89,7 +110,7 @@ via a pair of multiple-pass forward iterators. They are assumed to be one-dimens
 
 ```c++
 template <typename T>
-void npy_save(std::string const& fname, gsl::span<T const> data,
+void npy_save(std::string const& fname, cnpypp::span<T const> data,
               std::string_view mode = "w")
 ```
 This overload is provided for convenience when your data are in contiguous memory.
@@ -98,7 +119,7 @@ This overload is provided for convenience when your data are in contiguous memor
 template <typename TTupleIterator>
 void npy_save(std::string const& fname,
               std::vector<std::string_view> const& labels, TTupleIterator first,
-              gsl::span<size_t const> const shape, std::string_view mode = "w",
+              cnpypp::span<size_t const> const shape, std::string_view mode = "w",
               MemoryOrder memory_order = MemoryOrder::C)
 ```
 With this overload, it is possible to write labeled "structured arrays" (in the terminology of NumPy).
@@ -109,8 +130,7 @@ library. This way, you can serialize data in a structure-of-arrays layout as arr
 An example of this usage is provided in `examples/range_zip_example.cpp`.
 
 ### Writing data to .npz
-NPZ files are just zip archives containing one or more NPY files. `cnpy++` supports writing these, however, only
-without compression.
+NPZ files are just zip archives containing one or more NPY files.
 
 ```c++
 template <typename TConstInputIterator>
@@ -118,18 +138,25 @@ void npz_save(std::string const& zipname, std::string fname,
               TConstInputIterator start,
               std::initializer_list<size_t const> shape,
               std::string_view mode = "w",
-              MemoryOrder memory_order = MemoryOrder::C);
+              MemoryOrder memory_order = MemoryOrder::C)
               
 template <typename TConstInputIterator>
 void npz_save(std::string const& zipname, std::string fname,
-              TConstInputIterator start, gsl::span<size_t const> const shape,
+              TConstInputIterator start, cnpypp::span<size_t const> const shape,
+              std::string_view mode = "w",
+              MemoryOrder memory_order = MemoryOrder::C)
+
+template <typename TTupleIterator>
+void npz_save(std::string const& zipname, std::string const& fname,
+              std::vector<std::string_view> const& labels, TTupleIterator first,
+              cnpypp::span<size_t const> const shape,
               std::string_view mode = "w",
               MemoryOrder memory_order = MemoryOrder::C)
 ```
 The first parameter, `zipname`, refers to the filename of the NPZ archive, while `fname` refers to
-the filename inside the archive, without the ".npy" extension.  
+the filename inside the archive (excluding the "`.npy`" extension).
 `shape` and `memory_order` are equal to their counterparts in `npy_save()`.
-If `mode` is equal to "w", an already existing NPZ file is overwritten. If equal to "a", another
+If `mode` is equal to `"w"`, an already existing NPZ file is overwritten. If equal to `"a"`, another
 array is added to the archive. Note that it is not possible to extend an already existing array
 in the same way as it is possible with `npy_save()`.
 
@@ -154,23 +181,27 @@ std::map<std::string, NpyArray> npz_load(std::string const& fname)
 reads all arrays from a NPZ archive with filename `fname` into memory (files with data larger than available memory are currently not supported).
 The invividual arrays can be accessed from the returned map with their name as key.
 
-The `NpyArray` class provides the following functions:
+The `NpyArray` class provides the following attributes:
 ```c++
-std::vector<size_t> const& NpyArray::getShape() const
+std::vector<size_t> const NpyArray::shape
 ```
-returns the shape vector.
+The shape vector.
 
 ```c++
-MemoryOrder NpyArray::getMemoryOrder() const
+MemoryOrder NpyArray::memory_order
 ```
-returns the memory order.
+The memory order.
 
 ```c++
-std::vector<std::string> const& NpyArray::getLabels() const
+std::vector<std::string> const NpyArray::labels
 ```
-returns a vector of the labels if the array is structured. In case of a plain array without labels,
+A vector of the labels if the array is structured. In case of a plain array without labels,
 this vector is empty.
 
+```c++
+std::vector<size_t> const NpyArray::word_sizes
+```
+The byte sizes (e.g. 4 for `uint32_t`) of the fields of a structured array. In case of a plain array, this vector has only one element.
 
 ```c++
 template <typename T>
@@ -182,39 +213,23 @@ as the data in the file are packed, while a `std::tuple` is likely padded to hav
 A number of similar methods are `cbegin<T>()`, `end<T>()`, `cend<T>()`, `data<T>()`.
 
 ```c++
+template <typename T>
+subrange<T const*, T const*> NpyArray::make_range() const
+```
+Return a range-like object (meaning in particular that it has `begin()`, `end()`, `size()` and alike methods)
+which can be used, e.g., in range-based for-loops.
+
+```c++
 template <typename... TArgs>
 subrange<tuple_iterator<std::tuple<TArgs...>>> NpyArray::make_tuple_range() const
 ```
-For structured arrays, `make_tuple_range()` returns a range-like object (meaning in particular that it has
-`begin()`, `end()`, `size()` and alike methods) which can be used, e.g., in range-based for-loops. You need
-to provide the types of the elements of the structured array as template arguments.
+Returns a range-like object for structured arrays.  You need to provide the types of
+the elements of the structured array as template arguments.
 
 ```c++
 template <typename TValueType>
 subrange<stride_iterator<TValueType>> NpyArray::column_range(std::string_view name) const
 ```
-If you interested only in a particular field of a structured array (data "column"). `column_range` returns
+If you interested only in a particular field of a structured array (data "column"). `column_range()` returns
 a range that iterates only over the field indicated by its label `name` as parameter.
 
-# Description:
-
-There are two functions for writing data: `npy_save` and `npz_save`.
-
-There are 3 functions for reading:
-- `npy_load` will load a .npy file. 
-- `npz_load(fname)` will load a .npz and return a dictionary of NpyArray structues. 
-- `npz_load(fname,varname)` will load and return the NpyArray for data varname from the specified .npz file.
-
-The data structure for loaded data is below. 
-Data is accessed via the `data<T>()`-method, which returns a pointer of the specified type (which must match the underlying datatype of the data). 
-The array shape and word size are read from the npy header.
-
-```c++
-struct NpyArray {
-    std::vector<size_t> shape;
-    size_t word_size;
-    template<typename T> T* data();
-};
-```
-
-See [example1.cpp](example1.cpp) for examples of how to use the library. example1 will also be build during cmake installation.
