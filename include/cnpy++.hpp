@@ -39,9 +39,9 @@
 #endif
 
 #include <cnpy++.h>
-#include <map_type.hpp>
-#include <stride_iterator.hpp>
-#include <tuple_util.hpp>
+#include <cnpy++/map_type.hpp>
+#include <cnpy++/stride_iterator.hpp>
+#include <cnpy++/tuple_util.hpp>
 
 namespace cnpypp {
 template <typename T>
