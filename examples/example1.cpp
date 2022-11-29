@@ -222,7 +222,7 @@ int main() {
                      {tupleVec.size()});
 
     cnpypp::NpyArray arr = cnpypp::npy_load("structured.npy");
-    auto r = arr.make_tuple_range<int32_t, int8_t, int16_t>();
+    auto r = arr.tuple_range<int32_t, int8_t, int16_t>();
 
     if (!std::equal(tupleVec.begin(), tupleVec.end(), r.begin())) {
       std::cerr << "error in line " << __LINE__ << std::endl;
@@ -240,7 +240,7 @@ int main() {
                      {arrVec.size()});
 
     cnpypp::NpyArray arr = cnpypp::npy_load("structured2.npy");
-    auto r = arr.make_tuple_range<int8_t, int8_t>();
+    auto r = arr.tuple_range<int8_t, int8_t>();
 
     if (!std::equal(arrVec.begin(), arrVec.end(), r.begin(),
                     [](auto const& a, auto const& b) {

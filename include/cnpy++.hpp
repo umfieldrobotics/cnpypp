@@ -143,10 +143,10 @@ struct NpyArray {
   }
 
   template <typename... TArgs>
-  subrange<tuple_iterator<std::tuple<TArgs...>>> make_tuple_range() const {
+  subrange<tuple_iterator<std::tuple<TArgs...>>> tuple_range() const {
     if (sizeof...(TArgs) != word_sizes.size()) {
       throw std::runtime_error(
-          "make_tuple_range: number of type arguments does not match data");
+          "tuple_range: number of type arguments does not match data");
     } else {
       return subrange{tuple_iterator<std::tuple<TArgs...>>{buffer.get()},
                       tuple_iterator<std::tuple<TArgs...>>{
