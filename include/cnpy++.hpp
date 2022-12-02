@@ -143,7 +143,11 @@ struct NpyArray {
   }
 
   template <typename... TArgs>
-  subrange<tuple_iterator<std::tuple<TArgs...>>> tuple_range() const {
+  subrange<tuple_iterator<std::tuple<TArgs...>>> tuple_range() {
+    // TODO: refactor this to remove code duplication
+    // see Scott Meyers "Avoid Duplication in const and Non-const Member
+    // Function"
+
     if (sizeof...(TArgs) != word_sizes.size()) {
       throw std::runtime_error(
           "tuple_range: number of type arguments does not match data");
@@ -154,9 +158,26 @@ struct NpyArray {
     }
   }
 
+  template <typename... TArgs>
+  subrange<tuple_iterator<add_const_t<std::tuple<TArgs...>>>>
+  tuple_range() const {
+    if (sizeof...(TArgs) != word_sizes.size()) {
+      throw std::runtime_error(
+          "tuple_range: number of type arguments does not match data");
+    } else {
+      return subrange{
+          tuple_iterator<add_const_t<std::tuple<TArgs...>>>{buffer.get()},
+          tuple_iterator<add_const_t<std::tuple<TArgs...>>>{
+              buffer.get() + num_vals * total_value_size}};
+    }
+  }
+
   template <typename TValueType>
-  subrange<stride_iterator<TValueType>>
-  column_range(std::string_view name) const {
+  subrange<stride_iterator<TValueType>> column_range(std::string_view name) {
+    // TODO: refactor this to remove code duplication
+    // see Scott Meyers "Avoid Duplication in const and Non-const Member
+    // Function"
+
     if (auto it = std::find(labels.cbegin(), labels.cend(), name);
         it == labels.cend()) {
       std::stringstream ss;
@@ -179,6 +200,35 @@ struct NpyArray {
       auto end = stride_iterator<TValueType>{buffer.get() + offset +
                                                  total_value_size * num_vals,
                                              total_value_size};
+      return subrange{beg, end};
+    }
+  }
+
+  template <typename TValueType>
+  subrange<stride_iterator<TValueType const>>
+  column_range(std::string_view name) const {
+    if (auto it = std::find(labels.cbegin(), labels.cend(), name);
+        it == labels.cend()) {
+      std::stringstream ss;
+      ss << "column_range: " << std::quoted(name) << " not found in labels";
+      throw std::runtime_error{ss.str().c_str()};
+    } else {
+      std::ptrdiff_t const d = std::distance(labels.cbegin(), it);
+
+      if (word_sizes.at(d) != sizeof(TValueType)) {
+        throw std::runtime_error{
+            "column_range: word sizes of requested type and data do not match"};
+      }
+
+      ptrdiff_t const offset =
+          std::accumulate(word_sizes.cbegin(),
+                          std::next(word_sizes.cbegin(), d), std::ptrdiff_t{0});
+
+      auto beg = stride_iterator<TValueType const>{buffer.get() + offset,
+                                                   total_value_size};
+      auto end = stride_iterator<TValueType const>{
+          buffer.get() + offset + total_value_size * num_vals,
+          total_value_size};
       return subrange{beg, end};
     }
   }
