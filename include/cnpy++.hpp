@@ -89,6 +89,15 @@ enum class MemoryOrder {
   RowMajor = C
 };
 
+enum class CompressionMethod {
+  Store = ZIP_CM_STORE,
+  None = Store,
+  Deflate = ZIP_CM_DEFLATE,
+  BZip2 = ZIP_CM_BZIP2,
+  XZ = ZIP_CM_XZ,
+  ZSTD = ZIP_CM_ZSTD
+};
+
 struct NpyArray {
   NpyArray(NpyArray&& other)
       : shape{std::move(other.shape)}, word_sizes{std::move(other.word_sizes)},
@@ -509,7 +518,8 @@ std::tuple<size_t, zip_t*> prepare_npz(std::string const& zipname,
 #endif
 
 #ifndef NO_LIBZIP
-void finalize_npz(zip_t*, std::string, detail::additional_parameters&);
+void finalize_npz(zip_t*, std::string, detail::additional_parameters&,
+                  CompressionMethod);
 #endif
 
 #ifndef NO_LIBZIP
@@ -517,7 +527,8 @@ template <typename TConstInputIterator>
 void npz_save(std::string const& zipname, std::string const& fname,
               TConstInputIterator start, cnpypp::span<size_t const> const shape,
               std::string_view mode = "w",
-              MemoryOrder memory_order = MemoryOrder::C) {
+              MemoryOrder memory_order = MemoryOrder::C,
+              CompressionMethod compr_method = CompressionMethod::Deflate) {
   using value_type =
       typename std::iterator_traits<TConstInputIterator>::value_type;
   size_t constexpr wordsize = sizeof(value_type);
@@ -564,7 +575,7 @@ void npz_save(std::string const& zipname, std::string const& fname,
       create_npy_header(shape, map_type(value_type{}), wordsize, memory_order),
       wordsize, callback};
 
-  finalize_npz(archive, fname, parameters);
+  finalize_npz(archive, fname, parameters, compr_method);
 }
 #endif
 
@@ -574,7 +585,8 @@ void npz_save(std::string const& zipname, std::string const& fname,
               std::vector<std::string_view> const& labels, TTupleIterator first,
               cnpypp::span<size_t const> const shape,
               std::string_view mode = "w",
-              MemoryOrder memory_order = MemoryOrder::C) {
+              MemoryOrder memory_order = MemoryOrder::C,
+              CompressionMethod compr_method = CompressionMethod::Deflate) {
   using value_type = typename std::iterator_traits<TTupleIterator>::value_type;
 
   // forbid implementations of std::bool with sizeof(bool) != 1
@@ -632,7 +644,7 @@ void npz_save(std::string const& zipname, std::string const& fname,
       create_npy_header(shape, labels, dtypes, sizes, memory_order), sum_size,
       callback};
 
-  finalize_npz(archive, fname, parameters);
+  finalize_npz(archive, fname, parameters, compr_method);
 }
 #endif
 
@@ -642,10 +654,11 @@ void npz_save(std::string const& zipname, std::string fname,
               TConstInputIterator start,
               std::initializer_list<size_t const> shape,
               std::string_view mode = "w",
-              MemoryOrder memory_order = MemoryOrder::C) {
+              MemoryOrder memory_order = MemoryOrder::C,
+              CompressionMethod compr_method = CompressionMethod::Deflate) {
   npz_save(zipname, std::move(fname), start,
            cnpypp::span<size_t const>{std::data(shape), shape.size()}, mode,
-           memory_order);
+           memory_order, compr_method);
 }
 #endif
 

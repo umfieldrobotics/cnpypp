@@ -795,14 +795,16 @@ cnpypp::prepare_npz(std::string const& zipname,
 
 #ifndef NO_LIBZIP
 void cnpypp::finalize_npz(zip_t* archive, std::string fname,
-                          detail::additional_parameters& parameters) {
+                          detail::additional_parameters& parameters,
+                          CompressionMethod compr_method) {
   zip_source_t* source =
       zip_source_function(archive, detail::npzwrite_source_callback,
                           reinterpret_cast<void*>(&parameters));
 
   fname += ".npy";
-  zip_file_add(archive, fname.c_str(), source,
-               ZIP_FL_OVERWRITE | ZIP_FL_ENC_UTF_8);
+  auto const index = zip_file_add(archive, fname.c_str(), source,
+                                  ZIP_FL_OVERWRITE | ZIP_FL_ENC_UTF_8);
+  zip_set_file_compression(archive, index, static_cast<int>(compr_method), 0);
   zip_close(archive);
 }
 #endif
