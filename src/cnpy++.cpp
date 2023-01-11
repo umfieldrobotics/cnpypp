@@ -208,41 +208,6 @@ void cnpypp::parse_npy_dict(cnpypp::span<std::istream::char_type const> buffer,
   }
 }
 
-void cnpypp::parse_zip_footer(std::istream& fs, uint16_t& nrecs,
-                              uint32_t& global_header_size,
-                              uint32_t& global_header_offset) {
-  std::array<uint8_t, 22> footer;
-  fs.seekg(-22, std::ios_base::end);
-  fs.read(reinterpret_cast<char*>(&footer[0]), sizeof(char) * 22);
-
-  [[maybe_unused]] uint16_t disk_no, disk_start, nrecs_on_disk, comment_len;
-  disk_no =
-      boost::endian::endian_load<boost::uint16_t, 2,
-                                 boost::endian::order::little>(&footer[4]);
-  disk_start =
-      boost::endian::endian_load<boost::uint16_t, 2,
-                                 boost::endian::order::little>(&footer[6]);
-  nrecs_on_disk =
-      boost::endian::endian_load<boost::uint16_t, 2,
-                                 boost::endian::order::little>(&footer[8]);
-  nrecs = boost::endian::endian_load<boost::uint16_t, 2,
-                                     boost::endian::order::little>(&footer[10]);
-  global_header_size =
-      boost::endian::endian_load<boost::uint32_t, 4,
-                                 boost::endian::order::little>(&footer[12]);
-  global_header_offset =
-      boost::endian::endian_load<boost::uint32_t, 4,
-                                 boost::endian::order::little>(&footer[16]);
-  comment_len =
-      boost::endian::endian_load<boost::uint16_t, 2,
-                                 boost::endian::order::little>(&footer[20]);
-
-  if (disk_no != 0 || disk_start != 0 || nrecs_on_disk != nrecs ||
-      comment_len != 0) {
-    throw std::runtime_error("parse_zip_footer: unexpected data");
-  }
-}
-
 cnpypp::NpyArray load_the_npy_file(std::istream& fs) {
   std::vector<size_t> word_sizes, shape;
   std::vector<char> data_types;
@@ -454,7 +419,7 @@ cnpypp::create_npy_header(cnpypp::span<size_t const> const shape,
 
   // pad with spaces so that preamble+dict is modulo 16 bytes. preamble is 10
   // bytes. dict needs to end with \n
-  int remainder = 16 - (10 + dict.size()) % 16;
+  int const remainder = 16 - (10 + dict.size()) % 16;
   dict.insert(dict.end(), remainder, ' ');
   dict.back() = '\n';
 
@@ -492,7 +457,7 @@ cnpypp::create_npy_header(cnpypp::span<size_t const> const shape, char dtype,
 
   // pad with spaces so that preamble+dict is modulo 16 bytes. preamble is 10
   // bytes. dict needs to end with \n
-  int remainder = 16 - (10 + dict.size()) % 16;
+  int const remainder = 16 - (10 + dict.size()) % 16;
   dict.insert(dict.end(), remainder, ' ');
   dict.back() = '\n';
 

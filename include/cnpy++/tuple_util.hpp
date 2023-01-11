@@ -40,6 +40,23 @@ template <typename T>
 bool constexpr is_tuple_like_v =
     is_std_array_v<T> || is_specialization_of_v<std::pair, T> ||
     is_specialization_of_v<std::tuple, T>;
+
+template <typename T> struct is_bool : public std::is_same<T, bool> {};
+
+template <typename T> bool constexpr is_bool_v = is_bool<T>::value;
+
+template <typename T, size_t N, size_t i> bool constexpr has_bool_impl() {
+  if constexpr (i < N)
+    return is_bool_v<std::decay_t<typename std::tuple_element<i, T>::type>> ||
+           has_bool_impl<T, N, i + 1>();
+  else
+    return false;
+}
+
+template <typename T> bool constexpr has_bool() {
+  return has_bool_impl<T, std::tuple_size<T>::value, 0>();
+}
+
 } // namespace detail
 
 template <typename Tup> struct tuple_info {
@@ -49,6 +66,7 @@ template <typename Tup> struct tuple_info {
                 "must provide std::tuple-like type");
 
   static auto constexpr size = std::tuple_size_v<Tup>;
+  static bool constexpr has_bool_element = detail::has_bool<Tup>();
 
   // prevent any instantiation
   tuple_info() = delete;
