@@ -221,10 +221,12 @@ which can be used, e.g., in range-based for-loops.
 
 ```c++
 template <typename... TArgs>
-subrange<tuple_iterator<std::tuple<TArgs...>>> NpyArray::make_tuple_range() const
+subrange<tuple_iterator<std::tuple<TArgs...>>> NpyArray::tuple_range(bool force_check = false) const
 ```
-Returns a range-like object for structured arrays.  You need to provide the types of
-the elements of the structured array as template arguments.
+Returns a range-like object for structured arrays. You need to provide the types of
+the elements of the structured array as template arguments. If `force_check` is set to `true`, the byte sizes
+of the requested data types are checked against the values found in the file header and an exception is thrown
+if not.
 
 ```c++
 template <typename TValueType>
