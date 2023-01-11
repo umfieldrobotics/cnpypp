@@ -411,6 +411,10 @@ void npy_save(std::string const& fname, TConstInputIterator start,
   using value_type =
       typename std::iterator_traits<TConstInputIterator>::value_type;
 
+  // forbid implementations of std::bool with sizeof(bool) != 1; numpy can't
+  // handle these
+  static_assert(sizeof(value_type) == 1 || !std::is_same_v<value_type, bool>);
+
   if (mode == "a" && _exists(fname)) {
     // file exists. we need to append to it. read the header, modify the array
     // size
