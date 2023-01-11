@@ -279,10 +279,6 @@ void parse_npy_dict(cnpypp::span<std::istream::char_type const> buffer,
                     std::vector<size_t>& shape,
                     cnpypp::MemoryOrder& memory_order);
 
-void parse_zip_footer(std::istream& fp, uint16_t& nrecs,
-                      uint32_t& global_header_size,
-                      uint32_t& global_header_offset);
-
 npz_t npz_load(std::string const& fname);
 
 NpyArray npz_load(std::string const& fname, std::string const& varname);
