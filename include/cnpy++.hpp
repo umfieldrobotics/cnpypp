@@ -143,14 +143,15 @@ struct NpyArray {
   }
 
   template <typename... TArgs>
-  subrange<tuple_iterator<std::tuple<TArgs...>>> tuple_range() {
+  subrange<tuple_iterator<std::tuple<TArgs...>>>
+  tuple_range(bool force_check = false) {
     // TODO: refactor this to remove code duplication
     // see Scott Meyers "Avoid Duplication in const and Non-const Member
     // Function"
 
-    if (sizeof...(TArgs) != word_sizes.size()) {
+    if (force_check && !compare_word_sizes<TArgs...>()) {
       throw std::runtime_error(
-          "tuple_range: number of type arguments does not match data");
+          "tuple_range: word sizes do not match requested types");
     } else {
       return subrange{tuple_iterator<std::tuple<TArgs...>>{buffer.get()},
                       tuple_iterator<std::tuple<TArgs...>>{
@@ -160,10 +161,10 @@ struct NpyArray {
 
   template <typename... TArgs>
   subrange<tuple_iterator<add_const_t<std::tuple<TArgs...>>>>
-  tuple_range() const {
-    if (sizeof...(TArgs) != word_sizes.size()) {
+  tuple_range(bool force_check = false) const {
+    if (force_check && !compare_word_sizes<TArgs...>()) {
       throw std::runtime_error(
-          "tuple_range: number of type arguments does not match data");
+          "tuple_range: word sizes do not match requested types");
     } else {
       return subrange{
           tuple_iterator<add_const_t<std::tuple<TArgs...>>>{buffer.get()},
@@ -242,6 +243,14 @@ struct NpyArray {
 
 private:
   std::unique_ptr<std::byte[]> buffer;
+
+  template <typename... TArgs> bool compare_word_sizes() const {
+    auto const& requested_type_sizes =
+        tuple_info<std::tuple<TArgs...>>::element_sizes;
+    return std::equal(requested_type_sizes.cbegin(),
+                      requested_type_sizes.cend(), word_sizes.cbegin(),
+                      word_sizes.cend());
+  }
 };
 
 using npz_t = std::map<std::string, NpyArray>;
@@ -407,9 +416,10 @@ void npy_save(std::string const& fname, TConstInputIterator start,
   using value_type =
       typename std::iterator_traits<TConstInputIterator>::value_type;
 
-  // forbid implementations of std::bool with sizeof(bool) != 1; numpy can't
-  // handle these
-  static_assert(sizeof(value_type) == 1 || !std::is_same_v<value_type, bool>);
+  // forbid implementations of std::bool with sizeof(bool) != 1
+  // numpy can't handle these
+  static_assert(sizeof(value_type) == 1 || !std::is_same_v<value_type, bool>,
+                "platforms with sizeof(bool) != 1 not supported");
 
   if (mode == "a" && _exists(fname)) {
     // file exists. we need to append to it. read the header, modify the array
@@ -499,6 +509,11 @@ void npz_save(std::string const& zipname, std::string const& fname,
       typename std::iterator_traits<TConstInputIterator>::value_type;
   size_t constexpr wordsize = sizeof(value_type);
 
+  // forbid implementations of std::bool with sizeof(bool) != 1
+  // numpy can't handle these
+  static_assert(sizeof(value_type) == 1 || !std::is_same_v<value_type, bool>,
+                "platforms with sizeof(bool) != 1 not supported");
+
   auto [nels, archive] = prepare_npz(zipname, shape, mode);
   auto const Nels = nels; // clang++ can't capture nels in lambda (?)
 
@@ -547,6 +562,11 @@ void npz_save(std::string const& zipname, std::string const& fname,
               MemoryOrder memory_order = MemoryOrder::C) {
   using value_type = typename std::iterator_traits<TTupleIterator>::value_type;
 
+  // forbid implementations of std::bool with sizeof(bool) != 1
+  // numpy can't handle these
+  static_assert(sizeof(bool) == 1 || !tuple_info<value_type>::has_bool_element,
+                "platforms with sizeof(bool) != 1 not supported");
+
   if (labels.size() != std::tuple_size_v<value_type>) {
     throw std::runtime_error(
         "libcnpy++: number of labels does not match tuple size");
@@ -555,6 +575,11 @@ void npz_save(std::string const& zipname, std::string const& fname,
   static auto constexpr dtypes = tuple_info<value_type>::data_types;
   static auto constexpr sizes = tuple_info<value_type>::element_sizes;
   auto constexpr sum_size = tuple_info<value_type>::sum_sizes;
+
+  // forbid implementations of std::bool with sizeof(bool) != 1
+  // numpy can't handle these
+  static_assert(sizeof(bool) == 1 || !tuple_info<value_type>::has_bool_element,
+                "platforms with sizeof(bool) != 1 not supported");
 
   auto [nels, archive] = prepare_npz(zipname, shape, mode);
   auto const Nels = nels; // clang++ can't capture nels in lambda (?)
