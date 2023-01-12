@@ -26,7 +26,10 @@
 #include <vector>
 
 #include <boost/endian/buffers.hpp>
+
+#ifndef NO_LIBZIP
 #include <zip.h>
+#endif
 
 #if defined(MSGSL_SPAN)
 #include <gsl/span>
@@ -72,8 +75,10 @@ struct additional_parameters {
   std::function<size_t(cnpypp::span<char>, additional_parameters*)> const func;
 };
 
+#ifndef NO_LIBZIP
 zip_int64_t npzwrite_source_callback(void*, void*, zip_uint64_t,
                                      zip_source_cmd_t);
+#endif
 } // namespace detail
 
 enum class MemoryOrder {
@@ -494,12 +499,17 @@ void npy_save(std::string const& fname, TConstInputIterator start,
       mode, memory_order);
 }
 
+#ifndef NO_LIBZIP
 std::tuple<size_t, zip_t*> prepare_npz(std::string const& zipname,
                                        cnpypp::span<size_t const> const shape,
                                        std::string_view mode);
+#endif
 
+#ifndef NO_LIBZIP
 void finalize_npz(zip_t*, std::string, detail::additional_parameters&);
+#endif
 
+#ifndef NO_LIBZIP
 template <typename TConstInputIterator>
 void npz_save(std::string const& zipname, std::string const& fname,
               TConstInputIterator start, cnpypp::span<size_t const> const shape,
@@ -553,7 +563,9 @@ void npz_save(std::string const& zipname, std::string const& fname,
 
   finalize_npz(archive, fname, parameters);
 }
+#endif
 
+#ifndef NO_LIBZIP
 template <typename TTupleIterator>
 void npz_save(std::string const& zipname, std::string const& fname,
               std::vector<std::string_view> const& labels, TTupleIterator first,
@@ -619,7 +631,9 @@ void npz_save(std::string const& zipname, std::string const& fname,
 
   finalize_npz(archive, fname, parameters);
 }
+#endif
 
+#ifndef NO_LIBZIP
 template <typename TConstInputIterator>
 void npz_save(std::string const& zipname, std::string fname,
               TConstInputIterator start,
@@ -630,6 +644,7 @@ void npz_save(std::string const& zipname, std::string fname,
            cnpypp::span<size_t const>{std::data(shape), shape.size()}, mode,
            memory_order);
 }
+#endif
 
 template <typename TForwardIterator>
 void npy_save(std::string const& fname, TForwardIterator first,

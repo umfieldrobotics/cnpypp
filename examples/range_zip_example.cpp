@@ -16,9 +16,11 @@ int main() {
   cnpypp::npy_save("range_zip_data.npy", {"a", "b", "c"}, z.begin(),
                    {z.size()});
 
+#ifndef NO_LIBZIP
   std::array const shape{z.size()};
   cnpypp::npz_save("range_zip_data.npz", "struct", {"a", "b", "c"}, z.begin(),
                    cnpypp::span<size_t const>{shape.data(), shape.size()});
+#endif
 
   return EXIT_SUCCESS;
 }

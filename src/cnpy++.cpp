@@ -16,7 +16,10 @@
 
 #include <boost/endian/conversion.hpp>
 #include <boost/filesystem.hpp>
+
+#ifndef NO_LIBZIP
 #include <zip.h>
+#endif
 
 #include "cnpy++.hpp"
 
@@ -223,6 +226,7 @@ cnpypp::NpyArray load_the_npy_file(std::istream& fs) {
   return arr;
 }
 
+#ifndef NO_LIBZIP
 cnpypp::NpyArray load_npy(zip_t* archive, zip_int64_t index) {
   zip_stat_t fileinfo;
   zip_stat_index(archive, index, ZIP_FL_ENC_RAW, &fileinfo);
@@ -295,7 +299,9 @@ cnpypp::NpyArray load_npy(zip_t* archive, zip_int64_t index) {
   zip_fclose(file);
   return array;
 }
+#endif
 
+#ifndef NO_LIBZIP
 cnpypp::npz_t cnpypp::npz_load(std::string const& fname) {
   int errcode = 0;
   zip_t* const archive = zip_open(fname.c_str(), ZIP_RDONLY, &errcode);
@@ -331,7 +337,9 @@ cnpypp::npz_t cnpypp::npz_load(std::string const& fname) {
   zip_close(archive);
   return arrays;
 }
+#endif
 
+#ifndef NO_LIBZIP
 cnpypp::NpyArray cnpypp::npz_load(std::string const& fname,
                                   std::string const& varname) {
   int errcode = 0;
@@ -357,6 +365,7 @@ cnpypp::NpyArray cnpypp::npz_load(std::string const& fname,
   zip_close(archive);
   return array;
 }
+#endif
 
 cnpypp::NpyArray cnpypp::npy_load(std::string const& fname) {
   std::ifstream fs{fname, std::ios::binary};
@@ -549,6 +558,7 @@ int cnpypp_npy_save(char const* fname, cnpypp_data_type dtype,
   return retval;
 }
 
+#ifndef NO_LIBZIP
 int cnpypp_npz_save(char const* zipname, char const* filename,
                     enum cnpypp_data_type dtype, void const* data,
                     size_t const* shape, size_t rank, char const* mode,
@@ -624,6 +634,7 @@ int cnpypp_npz_save(char const* zipname, char const* filename,
 
   return retval;
 }
+#endif
 
 cnpypp_npyarray_handle* cnpypp_load_npyarray(char const* fname) {
   cnpypp::NpyArray* arr = nullptr;
@@ -664,6 +675,7 @@ cnpypp_npyarray_get_memory_order(cnpypp_npyarray_handle const* npyarr) {
              : cnpypp_memory_order_c;
 }
 
+#ifndef NO_LIBZIP
 zip_int64_t cnpypp::detail::npzwrite_source_callback(void* userdata, void* data,
                                                      zip_uint64_t length,
                                                      zip_source_cmd_t cmd) {
@@ -742,7 +754,9 @@ zip_int64_t cnpypp::detail::npzwrite_source_callback(void* userdata, void* data,
     return 0;
   }
 }
+#endif
 
+#ifndef NO_LIBZIP
 std::tuple<size_t, zip_t*>
 cnpypp::prepare_npz(std::string const& zipname,
                     cnpypp::span<size_t const> const shape,
@@ -762,7 +776,9 @@ cnpypp::prepare_npz(std::string const& zipname,
 
   return std::tuple{nels, archive};
 }
+#endif
 
+#ifndef NO_LIBZIP
 void cnpypp::finalize_npz(zip_t* archive, std::string fname,
                           detail::additional_parameters& parameters) {
   zip_source_t* source =
@@ -774,3 +790,4 @@ void cnpypp::finalize_npz(zip_t* archive, std::string fname,
                ZIP_FL_OVERWRITE | ZIP_FL_ENC_UTF_8);
   zip_close(archive);
 }
+#endif

@@ -9,6 +9,7 @@ get_directory_property(hasParent PARENT_DIRECTORY)
 # user can choose which implementation of span<T> to use
 set(CNPYPP_SPAN_IMPL CACHE STRING "select implementation of cnpypp::span<T>")
 set_property(CACHE CNPYPP_SPAN_IMPL PROPERTY STRINGS "MS_GSL" "GSL_LITE" "BOOST")
+option(CNPYPP_USE_LIBZIP "require libzip to enable support for npz" ON)
 
 set(minimum_boost_version 1.74)
 
@@ -49,7 +50,9 @@ endif()
 
 include(GNUInstallDirs)
 
-find_package(libzip REQUIRED)
+if(CNPYPP_USE_LIBZIP)
+  find_package(libzip REQUIRED)
+endif()
 find_package(Boost ${minimum_boost_version} COMPONENTS filesystem REQUIRED)
 
 target_compile_features(cnpy++ PUBLIC cxx_std_17)
@@ -57,7 +60,12 @@ set_property(TARGET cnpy++ PROPERTY CXX_EXTENSIONS OFF)
 target_include_directories(cnpy++ PUBLIC ${Boost_INCLUDE_DIR})
 target_include_directories(cnpy++ SYSTEM PUBLIC $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>)
 target_include_directories(cnpy++ SYSTEM INTERFACE $<INSTALL_INTERFACE:$<INSTALL_PREFIX>/include>)
-target_link_libraries(cnpy++ PRIVATE Boost::filesystem libzip::zip)
+target_link_libraries(cnpy++ PRIVATE Boost::filesystem)
+if(CNPYPP_USE_LIBZIP)
+  target_link_libraries(cnpy++ PRIVATE libzip::zip)
+else()
+  target_compile_definitions(cnpy++ PUBLIC NO_LIBZIP)
+endif()
 
 if(MSVC)
   target_compile_options(cnpy++ PRIVATE /W4 /WX)
@@ -72,6 +80,11 @@ install(FILES "include/cnpy++.hpp" "include/cnpy++.h" DESTINATION ${CMAKE_INSTAL
 if (NOT hasParent)
   add_executable(example1 "examples/example1.cpp")
   target_link_libraries(example1 cnpy++)
+
+  if (CNPYPP_USE_LIBZIP)
+    add_executable(example2 "examples/example2.cpp")
+    target_link_libraries(example2 cnpy++)
+  endif()
   
   add_executable(example_c "examples/example_c.c")
   target_link_libraries(example_c cnpy++)

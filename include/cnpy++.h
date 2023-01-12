@@ -43,14 +43,18 @@ int cnpypp_npy_save_1d(char const* fname, enum cnpypp_data_type,
                        void const* start, size_t const num_elem,
                        char const* mode);
 
+#ifndef NO_LIBZIP
 int cnpypp_npz_save(char const* zipname, char const* fname,
                     enum cnpypp_data_type dtype, void const* data,
                     size_t const* shape, size_t rank, char const* mode,
                     enum cnpypp_memory_order);
+#endif
 
+#ifndef NO_LIBZIP
 int cnpypp_npz_save_1d(char const* zipname, char const* fname,
                        enum cnpypp_data_type dtype, void const* data,
                        size_t num_elem, char const* mode);
+#endif
 
 struct cnpypp_npyarray_handle* cnpypp_load_npyarray(char const* fname);
 
