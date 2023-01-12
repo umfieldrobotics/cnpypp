@@ -15,7 +15,7 @@ Due to its simplicity, it is a convenient format for scientific computing to be 
 ### Requirements
 
 * a C++17-compatible compiler (gcc and clang have been tested succesfully)
-* libzip-devel
+* libzip-devel (required by default but optional)
 * boost (at least 1.74; if using >=1.78, you can use `boost::span` (see below)
 * optional: pre-installed versions of either Microsoft GSL or gsl-lite
 
@@ -29,6 +29,9 @@ if compiling with C++20 support. To select which implementation you want to use,
 cache variable `CNPYPP_SPAN_IMPL` to either `MS_GSL`, `GSL_LITE` or `BOOST`. If set to `MS_GSL`
 or `GSL_LITE`, the corresponding library will be downloaded by cmake (using git) if not found already
 on the system.
+
+Another option is `CNPYPP_USE_LIBZIP`, which by default is `ON`, but can be set to `OFF`. In that case,
+all functionality requiring libzip is disabled, i.e. no support for reading/writing NPZ archives.
 
 After the cmake invocation returned successfully, call `make cnpy++` to compile the library,
 or just `make` to compile the examples, too.
