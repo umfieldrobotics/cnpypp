@@ -16,6 +16,7 @@
 
 #include <boost/endian/conversion.hpp>
 #include <boost/filesystem.hpp>
+#include <boost/iostreams/device/mapped_file.hpp>
 
 #ifndef NO_LIBZIP
 #include <zip.h>
@@ -75,8 +76,6 @@ void cnpypp::parse_npy_header(std::istream& fs, std::vector<size_t>& word_sizes,
                               std::vector<std::string>& labels,
                               std::vector<size_t>& shape,
                               cnpypp::MemoryOrder& memory_order) {
-  auto const pos_start = fs.tellg();
-
   std::array<std::istream::char_type, 10> buffer;
   fs.read(buffer.data(), 10);
 
@@ -211,21 +210,6 @@ void cnpypp::parse_npy_dict(cnpypp::span<std::istream::char_type const> buffer,
   }
 }
 
-cnpypp::NpyArray load_the_npy_file(std::istream& fs) {
-  std::vector<size_t> word_sizes, shape;
-  std::vector<char> data_types;
-  std::vector<std::string> labels;
-  cnpypp::MemoryOrder memory_order;
-
-  cnpypp::parse_npy_header(fs, word_sizes, data_types, labels, shape,
-                           memory_order);
-
-  cnpypp::NpyArray arr{std::move(shape), std::move(word_sizes),
-                       std::move(labels), memory_order};
-  fs.read(arr.data<char>(), arr.num_bytes());
-  return arr;
-}
-
 #ifndef NO_LIBZIP
 cnpypp::NpyArray load_npy(zip_t* archive, zip_int64_t index) {
   zip_stat_t fileinfo;
@@ -256,16 +240,21 @@ cnpypp::NpyArray load_npy(zip_t* archive, zip_int64_t index) {
   parse_npy_header(header_buffer.get(), word_sizes, data_types, labels, shape,
                    memory_order);
 
-  NpyArray array{std::move(shape), std::move(word_sizes), std::move(labels),
-                 memory_order};
+  auto const num_vals = std::accumulate(shape.begin(), shape.end(), size_t{1},
+                                        std::multiplies<size_t>());
+  auto const total_value_size = std::accumulate(
+      word_sizes.begin(), word_sizes.end(), size_t{0}, std::plus<size_t>());
+  auto const num_bytes = total_value_size * num_vals;
 
-  zip_int64_t const offset = fileinfo.size - array.num_bytes();
+  auto buffer = std::make_unique<InMemoryBuffer>(num_bytes);
+
+  zip_int64_t const offset = fileinfo.size - num_bytes;
   if (fileinfo.size <= max_header_size) {
     // file fits completely into buffer, meaning we have
     // read it completely already
 
-    std::copy_n(&header_buffer[offset], array.num_bytes(),
-                array.data<uint8_t>());
+    std::copy_n(&header_buffer[offset], num_bytes,
+                reinterpret_cast<char*>(buffer->data()));
   } else { // we have only parts, seek back to beginning of data and read all
            // from there
     // works only if zip_source is seekable itself
@@ -289,15 +278,16 @@ cnpypp::NpyArray load_npy(zip_t* archive, zip_int64_t index) {
     }
 
     // now read data
-    if (zip_fread(file, array.data<uint8_t>(), array.num_bytes()) !=
-        static_cast<zip_int64_t>(array.num_bytes())) {
+    if (zip_fread(file, buffer->data(), num_bytes) !=
+        static_cast<zip_int64_t>(num_bytes)) {
       zip_fclose(file);
       throw std::runtime_error{"libcnpy++: zip_fread() failed"};
     }
   }
 
   zip_fclose(file);
-  return array;
+  return NpyArray{std::move(shape), std::move(word_sizes), std::move(labels),
+                  memory_order, std::move(buffer)};
 }
 #endif
 
@@ -367,13 +357,38 @@ cnpypp::NpyArray cnpypp::npz_load(std::string const& fname,
 }
 #endif
 
-cnpypp::NpyArray cnpypp::npy_load(std::string const& fname) {
+cnpypp::NpyArray cnpypp::npy_load(std::string const& fname,
+                                  bool memory_mapped) {
   std::ifstream fs{fname, std::ios::binary};
 
   if (!fs)
     throw std::runtime_error("npy_load: Unable to open file " + fname);
 
-  return load_the_npy_file(fs);
+  std::vector<size_t> word_sizes, shape;
+  std::vector<char> data_types;
+  std::vector<std::string> labels;
+  cnpypp::MemoryOrder memory_order;
+
+  cnpypp::parse_npy_header(fs, word_sizes, data_types, labels, shape,
+                           memory_order);
+
+  auto const num_vals = std::accumulate(shape.begin(), shape.end(), size_t{1},
+                                        std::multiplies<size_t>());
+  auto const total_value_size = std::accumulate(
+      word_sizes.begin(), word_sizes.end(), size_t{0}, std::plus<size_t>());
+  auto const num_bytes = total_value_size * num_vals;
+
+  std::unique_ptr<Buffer> buffer;
+
+  if (!memory_mapped) {
+    buffer = std::make_unique<InMemoryBuffer>(num_bytes);
+    fs.read(reinterpret_cast<char*>(buffer->data()), num_bytes);
+  } else {
+    buffer = std::make_unique<MemoryMappedBuffer>(fname, fs.tellg(), num_bytes);
+  }
+
+  return cnpypp::NpyArray{std::move(shape), std::move(word_sizes),
+                          std::move(labels), memory_order, std::move(buffer)};
 }
 
 std::vector<char>
