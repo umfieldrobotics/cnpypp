@@ -1,8 +1,8 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 3.10)
 
-project(CNPYpp LANGUAGES CXX C VERSION 2.0)
+project(CNPYpp LANGUAGES CXX C VERSION 2.1.0)
 
-add_library(cnpy++ "src/cnpy++.cpp" "src/c_interface.c")
+add_library(cnpy++ "src/cnpy++.cpp" "src/buffer.cpp" "src/c_interface.c")
 
 get_directory_property(hasParent PARENT_DIRECTORY)
 
@@ -53,14 +53,14 @@ include(GNUInstallDirs)
 if(CNPYPP_USE_LIBZIP)
   find_package(libzip REQUIRED)
 endif()
-find_package(Boost ${minimum_boost_version} COMPONENTS filesystem REQUIRED)
+find_package(Boost ${minimum_boost_version} COMPONENTS filesystem iostreams REQUIRED)
 
 target_compile_features(cnpy++ PUBLIC cxx_std_17)
 set_property(TARGET cnpy++ PROPERTY CXX_EXTENSIONS OFF)
 target_include_directories(cnpy++ PUBLIC ${Boost_INCLUDE_DIR})
 target_include_directories(cnpy++ SYSTEM PUBLIC $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>)
 target_include_directories(cnpy++ SYSTEM INTERFACE $<INSTALL_INTERFACE:$<INSTALL_PREFIX>/include>)
-target_link_libraries(cnpy++ PRIVATE Boost::filesystem)
+target_link_libraries(cnpy++ PRIVATE Boost::filesystem Boost::iostreams)
 if(CNPYPP_USE_LIBZIP)
   target_link_libraries(cnpy++ PRIVATE libzip::zip)
 else()
@@ -74,7 +74,10 @@ else()
 endif()
 
 install(TARGETS "cnpy++" LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
-install(FILES "include/cnpy++/tuple_util.hpp" "include/cnpy++/stride_iterator.hpp" "include/cnpy++/map_type.hpp" DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/cnpy++)
+install(FILES "include/cnpy++/tuple_util.hpp"
+    "include/cnpy++/stride_iterator.hpp"
+    "include/cnpy++/map_type.hpp"
+    "include/cnpy++/buffer.hpp" DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/cnpy++)
 install(FILES "include/cnpy++.hpp" "include/cnpy++.h" DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
 if (NOT hasParent)

@@ -37,7 +37,7 @@ int main() {
 
   // load it into a new array
   {
-    cnpypp::NpyArray const arr = cnpypp::npy_load("arr1.npy");
+    cnpypp::NpyArray const arr = cnpypp::npy_load("arr1.npy", true);
     auto const* const loaded_data = arr.data<uint32_t>();
 
     // make sure the loaded data matches the saved data
@@ -105,7 +105,8 @@ int main() {
     cnpypp::npy_save("structured.npy", {"a", "b", "c"}, tupleVec.begin(),
                      {tupleVec.size()});
 
-    cnpypp::NpyArray arr = cnpypp::npy_load("structured.npy");
+    // load memory-mapped
+    cnpypp::NpyArray arr = cnpypp::npy_load("structured.npy", true);
     auto r = arr.tuple_range<int32_t, int8_t, int16_t>();
 
     if (!std::equal(tupleVec.begin(), tupleVec.end(), r.begin())) {
@@ -123,7 +124,8 @@ int main() {
     cnpypp::npy_save("structured2.npy", {"a", "b"}, arrVec.begin(),
                      {arrVec.size()});
 
-    cnpypp::NpyArray arr = cnpypp::npy_load("structured2.npy");
+    // load memory-mapped
+    cnpypp::NpyArray arr = cnpypp::npy_load("structured2.npy", true);
     auto r = arr.tuple_range<int8_t, int8_t>();
 
     if (!std::equal(arrVec.begin(), arrVec.end(), r.begin(),
