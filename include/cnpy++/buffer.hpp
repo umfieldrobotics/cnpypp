@@ -48,6 +48,7 @@ public:
   virtual std::byte const* data() const override;
 
 private:
+  size_t const offset;
   boost::iostreams::mapped_file buffer;
 };
 } // namespace cnpypp

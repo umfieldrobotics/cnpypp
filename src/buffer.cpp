@@ -19,15 +19,20 @@ std::byte* cnpypp::InMemoryBuffer::data() {
       static_cast<InMemoryBuffer const&>(*this).data());
 }
 
+static auto const alignment = boost::iostreams::mapped_file::alignment();
+
 cnpypp::MemoryMappedBuffer::MemoryMappedBuffer(std::string const& path,
-                                               size_t offset, size_t length)
-    : buffer{path, boost::iostreams::mapped_file::mapmode::readonly, length,
-             static_cast<boost::iostreams::stream_offset>(offset)} {}
+                                               size_t offset_, size_t length)
+    : offset{offset_ % alignment},
+      buffer{path, boost::iostreams::mapped_file::mapmode::priv,
+             offset + length,
+             static_cast<boost::iostreams::stream_offset>(
+                 (offset_ / alignment) * alignment)} {}
 
 std::byte const* cnpypp::MemoryMappedBuffer::data() const {
-  return reinterpret_cast<std::byte const*>(buffer.data());
+  return reinterpret_cast<std::byte const*>(buffer.data() + offset);
 }
 
 std::byte* cnpypp::MemoryMappedBuffer::data() {
-  return reinterpret_cast<std::byte*>(buffer.data());
+  return reinterpret_cast<std::byte*>(buffer.data() + offset);
 }

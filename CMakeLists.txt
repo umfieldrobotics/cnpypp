@@ -74,7 +74,10 @@ else()
 endif()
 
 install(TARGETS "cnpy++" LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
-install(FILES "include/cnpy++/tuple_util.hpp" "include/cnpy++/stride_iterator.hpp" "include/cnpy++/map_type.hpp" DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/cnpy++)
+install(FILES "include/cnpy++/tuple_util.hpp"
+    "include/cnpy++/stride_iterator.hpp"
+    "include/cnpy++/map_type.hpp"
+    "include/buffer.hpp" DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/cnpy++)
 install(FILES "include/cnpy++.hpp" "include/cnpy++.h" DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
 if (NOT hasParent)
