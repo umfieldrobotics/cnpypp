@@ -751,9 +751,9 @@ zip_int64_t cnpypp::detail::npzwrite_source_callback(void* userdata, void* data,
     return 0;
 
   case ZIP_SOURCE_SUPPORTS:
-    return zip_source_make_command_bitmap(ZIP_SOURCE_OPEN, ZIP_SOURCE_READ,
-                                          ZIP_SOURCE_CLOSE, ZIP_SOURCE_STAT,
-                                          ZIP_SOURCE_ERROR, -1);
+    return zip_source_make_command_bitmap(
+        ZIP_SOURCE_OPEN, ZIP_SOURCE_READ, ZIP_SOURCE_CLOSE, ZIP_SOURCE_STAT,
+        ZIP_SOURCE_ERROR, ZIP_SOURCE_FREE, -1);
 
   case ZIP_SOURCE_FREE:
     return 0;
