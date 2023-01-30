@@ -1,0 +1,20 @@
+# This CITATION.cff file was generated with cffinit.
+# Visit https://bit.ly/cffinit to generate yours today!
+
+cff-version: 1.2.0
+title: cnpy++
+message: >-
+  If you use this software, please cite it using the
+  metadata from this file.
+type: software
+authors:
+  - given-names: Maximilian
+    family-names: Reininghaus
+identifiers:
+  - type: doi
+    value: 10.1016/j.softx.2023.101324
+    description: software paper
+license: MIT
+commit: e37d121fe1be0371822274156b918b4cbb8ddd1d
+version: 2.1.1
+date-released: '2023-01-19'
