@@ -16,5 +16,5 @@ identifiers:
     description: software paper
 license: MIT
 commit: e37d121fe1be0371822274156b918b4cbb8ddd1d
-version: 2.1.1
-date-released: '2023-01-19'
+version: 2.2.0
+date-released: '2023-01-30'
