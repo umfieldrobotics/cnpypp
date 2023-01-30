@@ -93,9 +93,19 @@ enum class CompressionMethod {
   Store = ZIP_CM_STORE,
   None = Store,
   Deflate = ZIP_CM_DEFLATE,
-  BZip2 = ZIP_CM_BZIP2,
-  XZ = ZIP_CM_XZ,
+  BZip2 = ZIP_CM_BZIP2
+#ifdef ZIP_CM_XZ
+  ,
+  XZ = ZIP_CM_XZ
+#endif
+#ifdef ZIP_CM_ZSTD
+  ,
   ZSTD = ZIP_CM_ZSTD
+#endif
+#ifdef ZIP_CM_LZMA
+  ,
+  LZMA = ZIP_CM_LZMA
+#endif
 };
 
 struct NpyArray {
@@ -116,8 +126,6 @@ struct NpyArray {
         total_value_size{std::accumulate(word_sizes.begin(), word_sizes.end(),
                                          size_t{0}, std::plus<size_t>())},
         buffer{std::move(_buffer)} {}
-  //~ : std::make_unique<InMemoryBuffer>(total_value_size *
-  //~ num_vals)} {}
 
   NpyArray(NpyArray const&) = delete;
 

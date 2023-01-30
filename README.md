@@ -145,24 +145,30 @@ void npz_save(std::string const& zipname, std::string fname,
               TConstInputIterator start,
               std::initializer_list<size_t const> shape,
               std::string_view mode = "w",
-              MemoryOrder memory_order = MemoryOrder::C)
+              MemoryOrder memory_order = MemoryOrder::C,
+              CompressionMethod compr_method = CompressionMethod::Deflate)
               
 template <typename TConstInputIterator>
 void npz_save(std::string const& zipname, std::string fname,
               TConstInputIterator start, cnpypp::span<size_t const> const shape,
               std::string_view mode = "w",
-              MemoryOrder memory_order = MemoryOrder::C)
+              MemoryOrder memory_order = MemoryOrder::C,
+              CompressionMethod compr_method = CompressionMethod::Deflate)
 
 template <typename TTupleIterator>
 void npz_save(std::string const& zipname, std::string const& fname,
               std::vector<std::string_view> const& labels, TTupleIterator first,
               cnpypp::span<size_t const> const shape,
               std::string_view mode = "w",
-              MemoryOrder memory_order = MemoryOrder::C)
+              MemoryOrder memory_order = MemoryOrder::C,
+              CompressionMethod compr_method = CompressionMethod::Deflate)
 ```
 The first parameter, `zipname`, refers to the filename of the NPZ archive, while `fname` refers to
 the filename inside the archive (excluding the "`.npy`" extension).
 `shape` and `memory_order` are equal to their counterparts in `npy_save()`.
+`compr_method` defines the compression methods. Valid values are `CompressionMethod::Store` (no compression), `CompressionMethod::Deflate`,
+`CompressionMethod::BZip2`, `CompressionMethod::LZMA` and `CompressionMethod::ZSTD` (the latter two depending on whether
+your libzip version is sufficiently recent to support these). Note that numpy may not be able to read all of these.
 If `mode` is equal to `"w"`, an already existing NPZ file is overwritten. If equal to `"a"`, another
 array is added to the archive. Note that it is not possible to extend an already existing array
 in the same way as it is possible with `npy_save()`.
