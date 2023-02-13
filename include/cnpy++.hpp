@@ -89,6 +89,7 @@ enum class MemoryOrder {
   RowMajor = C
 };
 
+#ifndef NO_LIBZIP
 enum class CompressionMethod {
   Store = ZIP_CM_STORE,
   None = Store,
@@ -107,6 +108,7 @@ enum class CompressionMethod {
   LZMA = ZIP_CM_LZMA
 #endif
 };
+#endif
 
 struct NpyArray {
   NpyArray(NpyArray&& other)
