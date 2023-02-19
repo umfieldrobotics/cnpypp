@@ -137,5 +137,27 @@ int main() {
     }
   }
 
+  // std::pair written as structured type
+  {
+
+    std::vector<std::pair<int8_t, uint16_t>> const arrVec{
+        {0x11, 0x22}, {0x33, 0x44}, {0x55, 0x66}};
+
+    cnpypp::npy_save("structured3.npy", {"a", "b"}, arrVec.begin(),
+                     {arrVec.size()});
+
+    // load memory-mapped
+    cnpypp::NpyArray arr = cnpypp::npy_load("structured3.npy", true);
+    auto r = arr.tuple_range<int8_t, uint16_t>();
+
+    if (!std::equal(arrVec.begin(), arrVec.end(), r.begin(),
+                    [](auto const& a, auto const& b) {
+                      return a.first == std::get<0>(b) &&
+                             a.second == std::get<1>(b);
+                    })) {
+      std::cerr << "error in line " << __LINE__ << std::endl;
+      return EXIT_FAILURE;
+    }
+  }
   return EXIT_SUCCESS;
 }
