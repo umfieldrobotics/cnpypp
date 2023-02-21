@@ -165,15 +165,17 @@ template <typename... Types> struct add_ref<std::tuple<Types...>> {
 
 template <typename Tup> using add_ref_t = typename add_ref<Tup>::type;
 
-namespace detail {
-template <typename T> auto dereference_impl(T* ptr) {
-  return std::tuple<std::add_lvalue_reference_t<T>>{*ptr};
-}
+template <typename T> struct remove_ref {};
 
-template <typename T, typename... Tother>
-auto dereference_impl(T* ptr, Tother... others) {
-  return std::tuple_cat(std::tuple<std::add_lvalue_reference_t<T>>(*ptr),
-                        dereference_impl(others...));
+template <typename... Types> struct remove_ref<std::tuple<Types...>> {
+  using type = std::tuple<typename std::remove_reference<Types>::type...>;
+};
+
+template <typename Tup> using remove_ref_t = typename remove_ref<Tup>::type;
+
+namespace detail {
+template <typename... TArgs> auto dereference_impl(TArgs*... ptrs) {
+  return std::tuple<std::add_lvalue_reference_t<TArgs>...>{*ptrs...};
 }
 
 } // namespace detail
@@ -185,7 +187,7 @@ class tuple_iterator
                                     add_ref_t<Tup>, std::ptrdiff_t> {
 public:
   using ref_tuple_t = add_ref_t<Tup>;
-  using pointer_tuple_t = add_ptr_t<Tup>;
+  using pointer_tuple_t = add_ptr_t<remove_ref_t<Tup>>;
   using const_ref_tuple_t = add_ref_t<add_const_t<Tup>>;
   using const_pointer_tuple_t = add_ptr_t<add_const_t<Tup>>;
 
@@ -207,7 +209,7 @@ private:
   template <int k> void constexpr unpack(pointer_tuple_t& ptrTup) const {
     if constexpr (k < tuple_info<Tup>::size) {
       auto& ref = std::get<k>(ptrTup);
-      ref = reinterpret_cast<std::tuple_element_t<k, Tup>*>(
+      ref = reinterpret_cast<std::tuple_element_t<k, pointer_tuple_t>>(
           ptr_ + tuple_info<Tup>::offsets[k]);
       unpack<k + 1>(ptrTup);
     }
@@ -223,7 +225,7 @@ private:
     unpack<0>(element_addresses);
 
     return std::apply(
-        [](auto... args) { return detail::dereference_impl(args...); },
+        [](auto*... args) { return detail::dereference_impl(args...); },
         element_addresses);
   }
 
