@@ -19,27 +19,15 @@
 namespace cnpypp {
 
 namespace detail {
-template <template <typename...> class Template, typename T>
-struct is_specialization_of : std::false_type {};
+template <typename T> struct is_tuple_like {
+  template <typename U, typename = std::tuple_size<U>>
+  static std::true_type test(void*);
+  template <typename> static std::false_type test(...);
 
-template <template <typename...> class Template, typename... Args>
-struct is_specialization_of<Template, Template<Args...>> : std::true_type {};
+  static bool constexpr value = decltype(test<T>(nullptr))::value;
+};
 
-template <template <typename...> class Template, typename... Args>
-bool constexpr is_specialization_of_v =
-    is_specialization_of<Template, Args...>::value;
-
-template <class T> struct is_std_array : std::false_type {};
-
-template <class T, std::size_t N>
-struct is_std_array<std::array<T, N>> : std::true_type {};
-
-template <typename T> bool constexpr is_std_array_v = is_std_array<T>::value;
-
-template <typename T>
-bool constexpr is_tuple_like_v =
-    is_std_array_v<T> || is_specialization_of_v<std::pair, T> ||
-    is_specialization_of_v<std::tuple, T>;
+template <typename T> bool constexpr is_tuple_like_v = is_tuple_like<T>::value;
 
 template <typename T> struct is_bool : public std::is_same<T, bool> {};
 
@@ -60,9 +48,7 @@ template <typename T> bool constexpr has_bool() {
 } // namespace detail
 
 template <typename Tup> struct tuple_info {
-  static_assert(detail::is_specialization_of_v<std::tuple, Tup> ||
-                    detail::is_specialization_of_v<std::pair, Tup> ||
-                    detail::is_std_array_v<Tup>,
+  static_assert(detail::is_tuple_like_v<Tup>,
                 "must provide std::tuple-like type");
 
   static auto constexpr size = std::tuple_size_v<Tup>;
