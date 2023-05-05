@@ -22,7 +22,7 @@ int main() {
     auto const begin = std::chrono::steady_clock::now();
     cnpypp::npz_save(
         "range_zip_data_store.npz", "struct", {"a", "b", "c"}, z.begin(),
-        cnpypp::span<size_t const>{shape.data(), shape.size()}, "a",
+        cnpypp::span<uint64_t const>{shape.data(), shape.size()}, "a",
         cnpypp::MemoryOrder::C, cnpypp::CompressionMethod::Store);
     auto const end = std::chrono::steady_clock::now();
     std::cout << "Store   "
@@ -37,7 +37,7 @@ int main() {
     auto const begin = std::chrono::steady_clock::now();
     cnpypp::npz_save(
         "range_zip_data_deflate.npz", "struct", {"a", "b", "c"}, z.begin(),
-        cnpypp::span<size_t const>{shape.data(), shape.size()}, "a",
+        cnpypp::span<uint64_t const>{shape.data(), shape.size()}, "a",
         cnpypp::MemoryOrder::C, cnpypp::CompressionMethod::Deflate);
     auto const end = std::chrono::steady_clock::now();
     std::cout << "Deflate "
@@ -52,7 +52,7 @@ int main() {
     auto const begin = std::chrono::steady_clock::now();
     cnpypp::npz_save(
         "range_zip_data_bzip2.npz", "struct", {"a", "b", "c"}, z.begin(),
-        cnpypp::span<size_t const>{shape.data(), shape.size()}, "a",
+        cnpypp::span<uint64_t const>{shape.data(), shape.size()}, "a",
         cnpypp::MemoryOrder::C, cnpypp::CompressionMethod::BZip2);
     auto const end = std::chrono::steady_clock::now();
     std::cout << "BZip2   "
@@ -68,7 +68,7 @@ int main() {
     auto const begin = std::chrono::steady_clock::now();
     cnpypp::npz_save(
         "range_zip_data_zstd.npz", "struct", {"a", "b", "c"}, z.begin(),
-        cnpypp::span<size_t const>{shape.data(), shape.size()}, "a",
+        cnpypp::span<uint64_t const>{shape.data(), shape.size()}, "a",
         cnpypp::MemoryOrder::C, cnpypp::CompressionMethod::ZSTD);
     auto const end = std::chrono::steady_clock::now();
     std::cout << "ZSTD    "
@@ -84,7 +84,7 @@ int main() {
     auto const begin = std::chrono::steady_clock::now();
     cnpypp::npz_save(
         "range_zip_data_lzma.npz", "struct", {"a", "b", "c"}, z.begin(),
-        cnpypp::span<size_t const>{shape.data(), shape.size()}, "a",
+        cnpypp::span<uint64_t const>{shape.data(), shape.size()}, "a",
         cnpypp::MemoryOrder::C, cnpypp::CompressionMethod::LZMA);
     auto const end = std::chrono::steady_clock::now();
     std::cout << "LZMA    "

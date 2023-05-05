@@ -22,7 +22,7 @@ static const int Nz = 8;
 
 static const int Nelem = Nx * Ny * Nz;
 
-static std::vector<size_t> const shape{Nz, Ny, Nx};
+static std::vector<uint64_t> const shape{Nz, Ny, Nx};
 
 int main() {
   auto const data = std::invoke([]() {
@@ -72,10 +72,7 @@ int main() {
     }
 
     auto constexpr new_shape = std::array{16, 4, 2};
-    auto constexpr new_size =
-        new_shape[0] * new_shape[1] *
-        new_shape[2]; // std::accumulate(new_shape.begin(), new_shape.end(), 1,
-                      // std::multiplies<size_t>());
+    auto constexpr new_size = new_shape[0] * new_shape[1] * new_shape[2]; 
     auto const complete_new_data = std::invoke([new_size]() {
       std::vector<uint32_t> data(new_size);
       std::iota(data.begin(), std::next(data.begin(), new_size / 2), 1);

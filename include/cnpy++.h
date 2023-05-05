@@ -37,7 +37,7 @@ uint32_t _crc32(unsigned long int, uint8_t const*,
 struct cnpypp_npyarray_handle;
 
 int cnpypp_npy_save(char const* fname, enum cnpypp_data_type, void const* start,
-                    size_t const* shape, size_t rank, char const* mode,
+                    uint64_t const* shape, unsigned rank, char const* mode,
                     enum cnpypp_memory_order);
 int cnpypp_npy_save_1d(char const* fname, enum cnpypp_data_type,
                        void const* start, size_t const num_elem,
@@ -46,7 +46,7 @@ int cnpypp_npy_save_1d(char const* fname, enum cnpypp_data_type,
 #ifndef NO_LIBZIP
 int cnpypp_npz_save(char const* zipname, char const* fname,
                     enum cnpypp_data_type dtype, void const* data,
-                    size_t const* shape, size_t rank, char const* mode,
+                    uint64_t const* shape, unsigned rank, char const* mode,
                     enum cnpypp_memory_order);
 #endif
 
@@ -63,9 +63,9 @@ void cnpypp_free_npyarray(struct cnpypp_npyarray_handle* npyarr);
 void const*
 cnpypp_npyarray_get_data(struct cnpypp_npyarray_handle const* npyarr);
 
-size_t const*
+uint64_t const*
 cnpypp_npyarray_get_shape(struct cnpypp_npyarray_handle const* npyarr,
-                          size_t* rank);
+                          unsigned* rank);
 
 enum cnpypp_memory_order
 cnpypp_npyarray_get_memory_order(struct cnpypp_npyarray_handle const* npyarr);

@@ -48,10 +48,10 @@ static std::regex const
     dtype_tuple_regex("\\('(\\w+)', '([<>|])([a-zA-z])(\\d+)'\\)");
 
 void cnpypp::parse_npy_header(std::istream::char_type const* buffer,
-                              std::vector<size_t>& word_sizes,
+                              std::vector<unsigned>& word_sizes,
                               std::vector<char>& data_types,
                               std::vector<std::string>& labels,
-                              std::vector<size_t>& shape,
+                              std::vector<uint64_t>& shape,
                               cnpypp::MemoryOrder& memory_order) {
   uint8_t const major_version = *reinterpret_cast<uint8_t const*>(buffer + 6);
   uint8_t const minor_version = *reinterpret_cast<uint8_t const*>(buffer + 7);
@@ -71,10 +71,11 @@ void cnpypp::parse_npy_header(std::istream::char_type const* buffer,
 
 static std::string_view const npy_magic_string = "\x93NUMPY";
 
-void cnpypp::parse_npy_header(std::istream& fs, std::vector<size_t>& word_sizes,
+void cnpypp::parse_npy_header(std::istream& fs,
+                              std::vector<unsigned>& word_sizes,
                               std::vector<char>& data_types,
                               std::vector<std::string>& labels,
-                              std::vector<size_t>& shape,
+                              std::vector<uint64_t>& shape,
                               cnpypp::MemoryOrder& memory_order) {
   std::array<std::istream::char_type, 10> buffer;
   fs.read(buffer.data(), 10);
@@ -107,10 +108,10 @@ void cnpypp::parse_npy_header(std::istream& fs, std::vector<size_t>& word_sizes,
 }
 
 void cnpypp::parse_npy_dict(cnpypp::span<std::istream::char_type const> buffer,
-                            std::vector<size_t>& word_sizes,
+                            std::vector<unsigned>& word_sizes,
                             std::vector<char>& data_types,
                             std::vector<std::string>& labels,
-                            std::vector<size_t>& shape,
+                            std::vector<uint64_t>& shape,
                             cnpypp::MemoryOrder& memory_order) {
   if (buffer.back() != '\n') {
     throw std::runtime_error("invalid header: missing terminating newline");
@@ -233,17 +234,18 @@ cnpypp::NpyArray load_npy(zip_t* archive, zip_int64_t index) {
     throw std::runtime_error{"libcnpy++: zip_fread() failed"};
   }
 
-  std::vector<size_t> shape, word_sizes;
+  std::vector<uint64_t> shape;
+  std::vector<unsigned> word_sizes;
   std::vector<char> data_types; // filled but not used
   std::vector<std::string> labels;
   MemoryOrder memory_order;
   parse_npy_header(header_buffer.get(), word_sizes, data_types, labels, shape,
                    memory_order);
 
-  auto const num_vals = std::accumulate(shape.begin(), shape.end(), size_t{1},
-                                        std::multiplies<size_t>());
+  auto const num_vals = std::accumulate(shape.begin(), shape.end(), uint64_t{1},
+                                        std::multiplies<uint64_t>{});
   auto const total_value_size = std::accumulate(
-      word_sizes.begin(), word_sizes.end(), size_t{0}, std::plus<size_t>());
+      word_sizes.begin(), word_sizes.end(), 0u, std::plus<unsigned>());
   auto const num_bytes = total_value_size * num_vals;
 
   auto buffer = std::make_unique<InMemoryBuffer>(num_bytes);
@@ -311,8 +313,8 @@ cnpypp::npz_t cnpypp::npz_load(std::string const& fname) {
         filename_view.substr(filename_view.size() - 4, filename_view.size());
 
     if (extension != ".npy") {
-      std::cerr << "file containes file not ending with \".npy\" (\""
-                << filename << "\"); skipping" << std::endl;
+      std::cerr << "file contains file not ending with \".npy\" (\"" << filename
+                << "\"); skipping" << std::endl;
       continue;
     }
 
@@ -364,7 +366,8 @@ cnpypp::NpyArray cnpypp::npy_load(std::string const& fname,
   if (!fs)
     throw std::runtime_error("npy_load: Unable to open file " + fname);
 
-  std::vector<size_t> word_sizes, shape;
+  std::vector<unsigned> word_sizes;
+  std::vector<uint64_t> shape;
   std::vector<char> data_types;
   std::vector<std::string> labels;
   cnpypp::MemoryOrder memory_order;
@@ -372,10 +375,10 @@ cnpypp::NpyArray cnpypp::npy_load(std::string const& fname,
   cnpypp::parse_npy_header(fs, word_sizes, data_types, labels, shape,
                            memory_order);
 
-  auto const num_vals = std::accumulate(shape.begin(), shape.end(), size_t{1},
-                                        std::multiplies<size_t>());
+  auto const num_vals = std::accumulate(shape.begin(), shape.end(), uint64_t{1},
+                                        std::multiplies<uint64_t>());
   auto const total_value_size = std::accumulate(
-      word_sizes.begin(), word_sizes.end(), size_t{0}, std::plus<size_t>());
+      word_sizes.begin(), word_sizes.end(), 0u, std::plus<unsigned>());
   auto const num_bytes = total_value_size * num_vals;
 
   std::unique_ptr<Buffer> buffer;
@@ -392,10 +395,10 @@ cnpypp::NpyArray cnpypp::npy_load(std::string const& fname,
 }
 
 std::vector<char>
-cnpypp::create_npy_header(cnpypp::span<size_t const> const shape,
+cnpypp::create_npy_header(cnpypp::span<uint64_t const> const shape,
                           cnpypp::span<std::string_view const> labels,
                           cnpypp::span<char const> dtypes,
-                          cnpypp::span<size_t const> sizes,
+                          cnpypp::span<unsigned const> sizes,
                           MemoryOrder memory_order) {
   std::vector<char> dict;
   append(dict, "{'descr': [");
@@ -459,8 +462,8 @@ cnpypp::create_npy_header(cnpypp::span<size_t const> const shape,
 }
 
 std::vector<char>
-cnpypp::create_npy_header(cnpypp::span<size_t const> const shape, char dtype,
-                          int wordsize, MemoryOrder memory_order) {
+cnpypp::create_npy_header(cnpypp::span<uint64_t const> const shape, char dtype,
+                          unsigned wordsize, MemoryOrder memory_order) {
   std::vector<char> dict;
   append(dict, "{'descr': '");
   dict += BigEndianTest();
@@ -498,12 +501,12 @@ cnpypp::create_npy_header(cnpypp::span<size_t const> const shape, char dtype,
 
 // for C compatibility
 int cnpypp_npy_save(char const* fname, cnpypp_data_type dtype,
-                    void const* start, size_t const* shape, size_t rank,
+                    void const* start, uint64_t const* shape, unsigned rank,
                     char const* mode, enum cnpypp_memory_order memory_order) {
   int retval = 0;
   try {
     std::string const filename = fname;
-    std::vector<size_t> shapeVec{};
+    std::vector<uint64_t> shapeVec{};
     shapeVec.reserve(rank);
     std::copy_n(shape, rank, std::back_inserter(shapeVec));
 
@@ -576,11 +579,11 @@ int cnpypp_npy_save(char const* fname, cnpypp_data_type dtype,
 #ifndef NO_LIBZIP
 int cnpypp_npz_save(char const* zipname, char const* filename,
                     enum cnpypp_data_type dtype, void const* data,
-                    size_t const* shape, size_t rank, char const* mode,
+                    uint64_t const* shape, unsigned rank, char const* mode,
                     enum cnpypp_memory_order memory_order) {
   int retval = 0;
   try {
-    std::vector<size_t> shapeVec{};
+    std::vector<uint64_t> shapeVec{};
     shapeVec.reserve(rank);
     std::copy_n(shape, rank, std::back_inserter(shapeVec));
 
@@ -671,8 +674,8 @@ void const* cnpypp_npyarray_get_data(cnpypp_npyarray_handle const* npyarr) {
   return array.data<void>();
 }
 
-size_t const* cnpypp_npyarray_get_shape(cnpypp_npyarray_handle const* npyarr,
-                                        size_t* rank) {
+uint64_t const* cnpypp_npyarray_get_shape(cnpypp_npyarray_handle const* npyarr,
+                                          unsigned* rank) {
   auto const& array = *reinterpret_cast<cnpypp::NpyArray const*>(npyarr);
 
   if (rank != nullptr) {
@@ -703,10 +706,10 @@ zip_int64_t cnpypp::detail::npzwrite_source_callback(void* userdata, void* data,
     return 0;
 
   case ZIP_SOURCE_READ: {
-    size_t bytes_written = 0;
+    decltype(length) bytes_written = 0;
     if (parameters->header_bytes_remaining) {
       auto const& npyheader = parameters->npyheader;
-      auto const tbw = std::min(length, npyheader.size());
+      auto const tbw = std::min(length, zip_uint64_t{npyheader.size()});
       data_char = std::copy_n(
           std::next(npyheader.cbegin(),
                     npyheader.size() - parameters->header_bytes_remaining),
@@ -717,9 +720,10 @@ zip_int64_t cnpypp::detail::npzwrite_source_callback(void* userdata, void* data,
     if (parameters->header_bytes_remaining == 0) {
       auto const buffer_tbw =
           parameters->buffer_size - parameters->bytes_buffer_written;
-      auto* const e =
-          std::copy_n(&parameters->buffer[parameters->bytes_buffer_written],
-                      std::min(buffer_tbw, length - bytes_written), data_char);
+      auto* const e = std::copy_n(
+          &parameters->buffer[parameters->bytes_buffer_written],
+          std::min(zip_uint64_t{buffer_tbw}, length - bytes_written),
+          data_char);
       auto const bytes_written_from_buffer = std::distance(data_char, e);
       parameters->bytes_buffer_written += bytes_written_from_buffer;
       bytes_written += bytes_written_from_buffer;
@@ -772,9 +776,9 @@ zip_int64_t cnpypp::detail::npzwrite_source_callback(void* userdata, void* data,
 #endif
 
 #ifndef NO_LIBZIP
-std::tuple<size_t, zip_t*>
+std::tuple<uint64_t, zip_t*>
 cnpypp::prepare_npz(std::string const& zipname,
-                    cnpypp::span<size_t const> const shape,
+                    cnpypp::span<uint64_t const> const shape,
                     std::string_view mode) {
   int errcode = 0;
   zip_t* const archive = zip_open(
@@ -786,8 +790,8 @@ cnpypp::prepare_npz(std::string const& zipname,
     throw std::runtime_error(zip_error_strerror(&err));
   }
 
-  size_t const nels =
-      std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<size_t>());
+  uint64_t const nels = std::accumulate(shape.begin(), shape.end(), uint64_t{1},
+                                        std::multiplies<uint64_t>());
 
   return std::tuple{nels, archive};
 }

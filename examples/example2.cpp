@@ -61,10 +61,10 @@ int main() {
   }
 
   std::list<uint32_t> const list_u{str1.cbegin(), str1.cend()}; // copy to list
-  std::list<float_t> const list_f{str2.cbegin(), str2.cend()};
+  std::list<float> const list_f{str2.cbegin(), str2.cend()};
 
-  std::vector<size_t> const shape_u = {list_u.size()};
-  std::vector<size_t> const shape_f = {list_f.size()};
+  std::vector<uint64_t> const shape_u = {list_u.size()};
+  std::vector<uint64_t> const shape_f = {list_f.size()};
 
   // append list to npz
   {
