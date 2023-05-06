@@ -292,7 +292,7 @@ std::vector<char> create_npy_header(cnpypp::span<uint64_t const> shape,
 std::vector<char> create_npy_header(cnpypp::span<uint64_t const> shape,
                                     cnpypp::span<std::string_view const> labels,
                                     cnpypp::span<char const> dtypes,
-                                    cnpypp::span<unsigned const> sizes,
+                                    cnpypp::span<size_t const> sizes,
                                     MemoryOrder memory_order);
 
 void parse_npy_header(std::istream& fs, std::vector<unsigned>& word_sizes,
