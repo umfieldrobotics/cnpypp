@@ -22,6 +22,5 @@ preferred-citation:
   year: 2023
   title: "cnpy++: A C++17 library for reading and writing .npy/.npz files"
 license: MIT
-commit: e37d121fe1be0371822274156b918b4cbb8ddd1d
 version: 2.3.0
 date-released: '2023-05-08'
