@@ -27,10 +27,13 @@
 using namespace cnpypp;
 
 char cnpypp::BigEndianTest() {
-  int32_t const x = 1;
-  static_assert(sizeof(x) > 1);
+  static_assert(sizeof(uint32_t) == 4);
+  union {
+    uint32_t i;
+    char c[4];
+  } constexpr test = {0x01020304};
 
-  return (((char*)&x)[0]) ? '<' : '>';
+  return (test.c[0] == 1) ? '<' : '>';
 }
 
 std::vector<char>& cnpypp::append(std::vector<char>& vec,
