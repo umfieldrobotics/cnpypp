@@ -180,8 +180,8 @@ NpyArray npy_load(std::string const& fname, bool memory_mapped = false)
 reads data from a file with filename `fname`. If `memory_mapped` is false (default), the whole file content is copied into memory.
 If true, the file gets memory-mapped, meaning its content can be read via pointers just like normal memory. The OS takes care to
 read the requested data from disk when necessary. This is useful when the file is larger than the free memory available.
-The address space available in 64 bit architechtures should be sufficient to map even the largest files.
-The return type, `NpyArray` contains the raw data as well as a number of methods to query its metadata and convenience functionality
+The address space available on 64 bit architectures should be sufficient to map even the largest files.
+The return type, `NpyArray`, contains the raw data as well as a number of methods to query its metadata and convenience functionality
 like iterators.
 
 ```c++
