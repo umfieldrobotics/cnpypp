@@ -33,7 +33,7 @@ char cnpypp::BigEndianTest() {
     char c[4];
   } constexpr test = {0x01020304};
 
-  return (test.c[0] == 1) ? '<' : '>';
+  return (test.c[0] == 0x04) ? '<' : '>';
 }
 
 std::vector<char>& cnpypp::append(std::vector<char>& vec,
