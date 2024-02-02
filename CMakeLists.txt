@@ -9,7 +9,7 @@ get_directory_property(hasParent PARENT_DIRECTORY)
 # user can choose which implementation of span<T> to use
 set(CNPYPP_SPAN_IMPL CACHE STRING "select implementation of cnpypp::span<T>")
 set_property(CACHE CNPYPP_SPAN_IMPL PROPERTY STRINGS "MS_GSL" "GSL_LITE" "BOOST")
-option(CNPYPP_USE_LIBZIP "require libzip to enable support for npz" ON)
+option(CNPYPP_USE_LIBZIP "require libzip to enable support for npz" OFF)
 
 set(minimum_boost_version 1.74)
 
